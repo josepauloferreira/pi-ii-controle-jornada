@@ -31,6 +31,6 @@ Em desenvolvimento — Projeto Integrador II, 2º semestre de 2026.
 
 ## Como contribuir
 
-O fluxo de contribuição do grupo está descrito em [CONTRIBUTING.md](CONTRIBUTING.md).
+Se esta é sua primeira vez usando Git/GitHub, comece pelo [Guia de contribuição para o grupo](GUIA_CONTRIBUICAO.md).\n\nAs regras resumidas do fluxo estão em [CONTRIBUTING.md](CONTRIBUTING.md).
 
 > Não publique no repositório senhas, arquivos `.env`, e-mails pessoais, RAs, assinaturas ou outros dados pessoais desnecessários.
