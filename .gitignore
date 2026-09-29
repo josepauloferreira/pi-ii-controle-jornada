@@ -1,0 +1,18 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Dependencies
+node_modules/
+
+# IDEs
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
