@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("node:path");
 const db = require("./database");
 
 const app = express();
@@ -55,6 +56,11 @@ const salvarDia = db.prepare(`
     extras = excluded.extras
 `);
 const excluirDia = db.prepare("DELETE FROM registros WHERE data = ?");
+
+// Prévia do frontend atual integrada à API. A versão original permanece intacta.
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "demo.html"));
+});
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
