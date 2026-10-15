@@ -4,6 +4,20 @@ Projeto Integrador em Computação II — UNIVESP (2026).
 
 Aplicação web para registrar e acompanhar a jornada de trabalho em home office.
 
+## Roadmap
+
+- [ ] [1. Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
+- [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
+- [ ] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
+- [ ] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
+
+As etapas 1 e 2 podem ser desenvolvidas em paralelo. A etapa 3 depende das duas primeiras, e a etapa 4 depende da terceira.
+
+**Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
+
+**Pendente:** integrar o frontend organizado com Vite e habilitar a restauração de backups JSON na demonstração.
+
+
 ## O que o sistema faz
 
 - Registra entrada, saída para almoço, retorno e saída.
@@ -66,13 +80,7 @@ Para parar o servidor, pressione `Ctrl+C` no terminal.
 
 Exemplo: com o servidor iniciado, acesse `http://localhost:3000/api/registros` no próprio Codespaces para visualizar os registros em JSON.
 
-## O que ainda falta
-
-- Integrar o backend ao frontend organizado com Vite.
-- Habilitar a **restauração** de backup JSON na demonstração. Por enquanto, é possível baixar o backup, mas não restaurá-lo pela interface.
-- A versão inicial em `Projeto-PI-Ponto.html` e a demonstração **não compartilham dados automaticamente**.
-
-O projeto é acadêmico e ainda não foi validado para uso como sistema oficial de ponto.
+**Observação:** a versão inicial em `Projeto-PI-Ponto.html` e a demonstração integrada não compartilham dados automaticamente. O projeto é acadêmico e ainda não foi validado como sistema oficial de ponto.
 
 ## Como contribuir
 
