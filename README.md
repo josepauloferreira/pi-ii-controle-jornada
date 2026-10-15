@@ -26,7 +26,7 @@ O saldo só aparece depois que a jornada é concluída. Antes disso, mostra **"E
 2. No terminal, entre na branch do backend e inicie o servidor:
 
 ```bash
-git switch feat/backend-sqlite
+git switch main
 git pull
 cd backend
 npm install
