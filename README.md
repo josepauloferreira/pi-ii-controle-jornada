@@ -2,43 +2,78 @@
 
 Projeto Integrador em Computação II — UNIVESP (2026).
 
-## Sobre o projeto
+Aplicação web para registrar e acompanhar a jornada de trabalho em home office.
 
-Estamos criando um sistema web simples para uma pessoa registrar e consultar sua jornada de trabalho em home office.
+## O que o sistema faz
 
-O sistema permite registrar **entrada, saída para almoço, retorno e saída**, além de consultar o histórico, editar registros e baixar os dados.
+- Registra entrada, saída para almoço, retorno e saída.
+- Mostra horas trabalhadas, jornada prevista e saldo do dia.
+- Permite consultar, editar e excluir registros, inclusive batidas extras.
+- Salva as configurações da jornada.
+- Exporta histórico em CSV e faz backup em JSON.
+
+O saldo só aparece depois que a jornada é concluída. Antes disso, mostra **"Em andamento"**.
 
 ## Tecnologias
 
-- **Frontend:** HTML, CSS e JavaScript com Vite.
-- **Backend:** Node.js com Express.
+- **Interface:** HTML, CSS e JavaScript. A organização com Vite ainda é uma tarefa do grupo.
+- **Servidor:** Node.js + Express.
 - **Banco de dados:** SQLite.
 
-## Como está hoje
+## Como executar no GitHub Codespaces
 
-Já temos uma primeira versão no arquivo [Projeto-PI-Ponto.html](./Projeto-PI-Ponto.html).
+1. Abra o repositório no Codespaces.
+2. No terminal, entre na branch do backend e inicie o servidor:
 
-Para ver essa versão: baixe o repositório em **Code → Download ZIP**, extraia os arquivos e abra o HTML no navegador.
+```bash
+git switch feat/backend-sqlite
+git pull
+cd backend
+npm install
+npm start
+```
 
-**Importante:** essa primeira versão guarda os dados no próprio navegador (`localStorage`). Vite, backend e SQLite **ainda serão implementados**. Se você já usou essa versão, faça um backup JSON antes de trocar de versão.
+3. Abra a aba **Ports (Portas)** do Codespaces e localize a porta **3000**.
+4. Deixe a porta como **Private** e clique em **Open in Browser**.
 
-## Tarefas do grupo
+A página aberta é a **demonstração do sistema conectada ao SQLite**. Não é preciso iniciar outro servidor para ver essa demonstração.
 
-Cada link abre uma tarefa com o que fazer e como saber que terminou.
+Para parar o servidor, pressione `Ctrl+C` no terminal.
 
-1. [Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
-2. [Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
-3. [Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
-4. [Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
+**Requisito:** Node.js 22 ou superior.
 
-**Ordem:** tarefas 1 e 2 podem ser feitas ao mesmo tempo. Depois fazemos a 3 e, por último, a 4.
+## Arquivos principais
 
-## Como ajudar
+- `Projeto-PI-Ponto.html`: versão inicial, que salva os dados no navegador.
+- `backend/demo.html`: demonstração da interface conectada ao banco de dados.
+- `backend/server.js`: servidor Express e endereços da API.
+- `backend/database.js`: criação das tabelas SQLite.
+- `backend/dados/jornada.db`: banco criado automaticamente quando o servidor inicia.
 
-1. Abra uma **issue** (tarefa) e avise nos comentários que vai ajudar.
-2. Combine com o grupo qual parte você fará, para ninguém trabalhar na mesma coisa sem saber.
-3. Faça as alterações em uma **branch** (cópia de trabalho), sem alterar diretamente a `main`.
-4. Abra um **pull request** (pedido para juntar suas alterações ao projeto) e explique o que fez.
-5. Outra pessoa confere se está funcionando antes de juntar à `main`.
+**Atenção:** o arquivo `jornada.db` fica apenas no ambiente onde o backend está rodando, não é enviado ao GitHub. Se o Codespace for excluído, esses dados também poderão ser perdidos. Guarde cópias dos dados de que precisar.
 
-**Combinado:** vamos manter o projeto simples e aproveitar o código que já existe. Não colocar no GitHub bancos SQLite com dados reais, arquivos de backup ou informações pessoais.
+## Endereços da API
+
+| Método | Endereço | Para quê? |
+| --- | --- | --- |
+| GET | `/api/health` | Verificar se o servidor está funcionando |
+| GET | `/api/registros` | Consultar todos os dias registrados |
+| GET | `/api/registros/:data` | Consultar um dia (ex.: 2026-10-15) |
+| PUT | `/api/registros/:data` | Criar ou atualizar um dia |
+| DELETE | `/api/registros/:data` | Excluir um dia |
+| GET | `/api/configuracoes` | Consultar configurações |
+| PUT | `/api/configuracoes` | Salvar configurações |
+
+Exemplo: com o servidor iniciado, acesse `http://localhost:3000/api/registros` no próprio Codespaces para visualizar os registros em JSON.
+
+## O que ainda falta
+
+- Integrar o backend ao frontend organizado com Vite.
+- Habilitar a **restauração** de backup JSON na demonstração. Por enquanto, é possível baixar o backup, mas não restaurá-lo pela interface.
+- A versão inicial em `Projeto-PI-Ponto.html` e a demonstração **não compartilham dados automaticamente**.
+
+O projeto é acadêmico e ainda não foi validado para uso como sistema oficial de ponto.
+
+## Como contribuir
+
+Veja as tarefas do grupo na aba [Issues](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues). Avise qual tarefa fará e trabalhe em uma branch separada, sem modificar diretamente a `main`. Ao terminar, abra um Pull Request para o grupo revisar.

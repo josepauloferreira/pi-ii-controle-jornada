@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Meu Ponto - Home Office</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f6f8;
+            color: #222;
+        }
+
+        header {
+            background: #1f2937;
+            color: white;
+            padding: 20px;
+        }
+
+        header h1 {
+            margin-bottom: 5px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+
+        .topo {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
+
+        .relogio {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .data-atual {
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 22px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
+        }
+
+        .card h2 {
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .bater-ponto {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        .btn-ponto {
+            border: none;
+            border-radius: 12px;
+            padding: 20px 45px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            background: #2563eb;
+            color: white;
+            transition: 0.2s;
+        }
+
+        .btn-ponto:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-ponto:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .batidas-hoje {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .batida {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .batida strong {
+            display: block;
+            margin-bottom: 8px;
+        }
+
+        .horario {
+            font-size: 30px;
+            font-weight: bold;
+            color: #2563eb;
+        }
+
+        .extra {
+            margin-top: 15px;
+            border-top: 1px solid #ddd;
+            padding-top: 15px;
+        }
+
+        .extra-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            gap: 10px;
+        }
+
+        .extra-acoes,
+        .batida-acoes {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .batida-acoes {
+            margin-top: 10px;
+        }
+
+        .btn-apagar-batida {
+            padding: 6px 9px;
+            font-size: 12px;
+        }
+
+        .btn {
+            border: none;
+            border-radius: 7px;
+            padding: 9px 14px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-secundario {
+            background: #e5e7eb;
+            color: #111827;
+        }
+
+        .btn-vermelho {
+            background: #dc2626;
+            color: white;
+        }
+
+        .btn-verde {
+            background: #16a34a;
+            color: white;
+        }
+
+        .btn-azul {
+            background: #2563eb;
+            color: white;
+        }
+
+        .acoes {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .configuracao {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 7px;
+            font-size: 15px;
+        }
+
+        .filtros {
+            display: flex;
+            gap: 15px;
+            align-items: end;
+            flex-wrap: wrap;
+        }
+
+        .filtro-item {
+            min-width: 180px;
+        }
+
+        .resumo {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+        }
+
+        .resumo-item {
+            padding: 18px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border: 1px solid #e5e7eb;
+        }
+
+        .resumo-item span {
+            display: block;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .resumo-item strong {
+            font-size: 24px;
+        }
+
+        .tabela-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            min-width: 900px;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+
+        th {
+            background: #f3f4f6;
+        }
+
+        .saldo-positivo {
+            color: #15803d;
+            font-weight: bold;
+        }
+
+        .saldo-negativo {
+            color: #dc2626;
+            font-weight: bold;
+        }
+
+        .sem-registro {
+            color: #888;
+        }
+
+        .mensagem {
+            position: fixed;
+            right: 20px;
+            bottom: 20px;
+            padding: 15px 20px;
+            border-radius: 8px;
+            background: #111827;
+            color: white;
+            display: none;
+            z-index: 1000;
+        }
+
+        .modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            padding: 20px;
+        }
+
+        .modal-content {
+            background: white;
+            width: 100%;
+            max-width: 500px;
+            border-radius: 12px;
+            padding: 25px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+        }
+
+        .campo {
+            margin-bottom: 15px;
+        }
+
+        .modal-acoes {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        @media (max-width: 800px) {
+
+            .batidas-hoje,
+            .resumo,
+            .configuracao {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (max-width: 500px) {
+
+            .batidas-hoje,
+            .resumo,
+            .configuracao {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-ponto {
+                width: 100%;
+            }
+
+            .topo {
+                display: block;
+            }
+
+            .relogio {
+                margin-top: 15px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="container">
+            <h1>Meu Ponto</h1>
+            <p>Controle de jornada - Home Office</p>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <div style="margin-bottom:20px;padding:12px 16px;border-left:4px solid #2563eb;background:#eff6ff;border-radius:8px;color:#1e3a8a"><strong>Demonstração conectada ao SQLite.</strong> Os dados são salvos no servidor, não no navegador. Esta prévia não importa automaticamente registros antigos; preserve seus backups.</div>
+
+        <!-- TOPO -->
+        <div class="topo">
+
+            <div>
+                <div class="relogio" id="relogio">
+                    00:00:00
+                </div>
+
+                <div class="data-atual" id="dataAtual">
+                    --
+                </div>
+            </div>
+
+        </div>
+
+
+        <!-- BATER PONTO -->
+        <div class="card">
+
+            <h2>Ponto de hoje</h2>
+
+            <div class="bater-ponto">
+
+                <button class="btn-ponto" id="btnBaterPonto" onclick="baterPonto()">
+                    BATER PONTO
+                </button>
+
+            </div>
+
+            <div class="batidas-hoje">
+
+                <div class="batida">
+                    <strong>Entrada</strong>
+                    <div class="horario" id="entrada">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarEntrada" type="button" onclick="editarBatidaHoje('entrada')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarEntrada" type="button" onclick="excluirBatidaHoje('entrada')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+                <div class="batida">
+                    <strong>Saída almoço</strong>
+                    <div class="horario" id="saidaAlmoco">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarSaidaAlmoco" type="button" onclick="editarBatidaHoje('saidaAlmoco')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarSaidaAlmoco" type="button" onclick="excluirBatidaHoje('saidaAlmoco')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+                <div class="batida">
+                    <strong>Retorno almoço</strong>
+                    <div class="horario" id="retornoAlmoco">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarRetornoAlmoco" type="button" onclick="editarBatidaHoje('retornoAlmoco')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarRetornoAlmoco" type="button" onclick="excluirBatidaHoje('retornoAlmoco')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+                <div class="batida">
+                    <strong>Saída</strong>
+                    <div class="horario" id="saida">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarSaida" type="button" onclick="editarBatidaHoje('saida')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarSaida" type="button" onclick="excluirBatidaHoje('saida')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="extra">
+
+                <strong>Batidas extras</strong>
+
+                <div id="extrasHoje">
+                    <p class="sem-registro">
+                        Nenhuma batida extra.
+                    </p>
+                </div>
+
+                <br>
+
+                <button class="btn btn-secundario" onclick="abrirModalExtra()">
+                    + Adicionar batida extra
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- RESUMO DO DIA -->
+        <div class="card">
+
+            <h2>Resumo de hoje</h2>
+
+            <div class="resumo">
+
+                <div class="resumo-item">
+                    <span>Horas trabalhadas</span>
+                    <strong id="horasHoje">00:00</strong>
+                </div>
+
+                <div class="resumo-item">
+                    <span>Jornada prevista</span>
+                    <strong id="jornadaHoje">08:00</strong>
+                </div>
+
+                <div class="resumo-item">
+                    <span>Saldo do dia</span>
+                    <strong id="saldoHoje">Não iniciada</strong>
+                </div>
+
+                <div class="resumo-item">
+                    <span>Batidas</span>
+                    <strong id="quantidadeBatidas">0</strong>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- CONFIGURAÇÕES -->
+        <div class="card">
+
+            <h2>Configuração da jornada</h2>
+
+            <div class="configuracao">
+
+                <div>
+                    <label>Horas por dia</label>
+
+                    <input type="time" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()">
+                </div>
+
+                <div>
+                    <label>Início da semana</label>
+
+                    <select id="inicioSemana" onchange="salvarConfiguracoes()">
+                        <option value="1">Segunda-feira</option>
+                        <option value="0">Domingo</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Nome do funcionário</label>
+
+                    <input type="text" id="nomeFuncionario" placeholder="Seu nome" onchange="salvarConfiguracoes()">
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- HISTÓRICO -->
+        <div class="card">
+
+            <h2>Histórico</h2>
+
+            <div class="filtros">
+
+                <div class="filtro-item">
+
+                    <label>Mês</label>
+
+                    <input type="month" id="mesFiltro" onchange="renderizarHistorico()">
+
+                </div>
+
+                <button class="btn btn-azul" onclick="exportarCSV()">
+                    Exportar CSV
+                </button>
+
+                <button class="btn btn-verde" onclick="exportarJSON()">
+                    Fazer backup
+                </button>
+
+                <button class="btn btn-secundario" disabled title="Restauração ainda não integrada nesta demonstração">
+                    Restaurar backup
+                </button>
+
+                <input type="file" id="arquivoJSON" accept=".json" style="display:none" onchange="importarJSON(event)">
+
+            </div>
+
+            <br>
+
+            <div class="tabela-container">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+                            <th>Data</th>
+                            <th>Entrada</th>
+                            <th>Saída almoço</th>
+                            <th>Retorno</th>
+                            <th>Saída</th>
+                            <th>Extras</th>
+                            <th>Horas trabalhadas</th>
+                            <th>Saldo</th>
+                            <th>Ações</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="tabelaHistorico">
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- MODAL BATIDA EXTRA -->
+
+    <div class="modal" id="modalExtra">
+
+        <div class="modal-content">
+
+            <h2 id="tituloModalExtra">Gerenciar batidas extras</h2>
+
+            <p id="dataModalExtra" class="sem-registro" style="margin-bottom: 12px"></p>
+
+            <input type="hidden" id="dataExtra">
+            <input type="hidden" id="indiceExtra" value="">
+
+            <div id="listaExtrasModal" style="margin-bottom: 18px"></div>
+
+            <div class="campo">
+
+                <label>Horário</label>
+
+                <input type="time" id="horarioExtra">
+
+            </div>
+
+            <div class="campo">
+
+                <label>Descrição</label>
+
+                <input type="text" id="descricaoExtra" placeholder="Ex.: Retorno de atividade">
+
+            </div>
+
+            <div class="modal-acoes">
+
+                <button class="btn btn-secundario" onclick="fecharModalExtra()">
+                    Cancelar
+                </button>
+
+                <button class="btn btn-azul" onclick="salvarBatidaExtra()">
+                    <span id="textoBotaoExtra">Adicionar batida</span>
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- MODAL EDIÇÃO -->
+
+    <div class="modal" id="modalEdicao">
+
+        <div class="modal-content">
+
+            <h2>Editar registro</h2>
+
+            <input type="hidden" id="dataEdicao">
+
+            <div class="campo">
+
+                <label>Entrada</label>
+
+                <input type="time" id="editEntrada">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('entrada')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="campo">
+
+                <label>Saída almoço</label>
+
+                <input type="time" id="editSaidaAlmoco">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saidaAlmoco')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="campo">
+
+                <label>Retorno almoço</label>
+
+                <input type="time" id="editRetorno">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('retornoAlmoco')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="campo">
+
+                <label>Saída</label>
+
+                <input type="time" id="editSaida">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saida')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="modal-acoes">
+
+                <button class="btn btn-secundario" onclick="fecharModalEdicao()">
+                    Cancelar
+                </button>
+
+                <button class="btn btn-azul" onclick="salvarEdicao()">
+                    Salvar alterações
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="mensagem" id="mensagem">
+        Registro salvo!
+    </div>
+
+
+    <script>
+        const CAMPOS_PONTO = ["entrada", "saidaAlmoco", "retornoAlmoco", "saida"];
+        let registros = {};
+        let configuracoes = { jornada: "08:00", inicioSemana: "1", nome: "" };
+        let mensagemTimer = null;
+
+        // A demonstração é servida pelo Express, junto à própria API.
+        async function requisitarAPI(url, opcoes = {}) {
+            const resposta = await fetch(url, opcoes);
+            if (!resposta.ok) {
+                const erro = await resposta.json().catch(() => ({}));
+                throw new Error(erro.erro || "A operação não pôde ser concluída.");
+            }
+            return resposta.status === 204 ? null : resposta.json();
+        }
+
+        const jsonRequest = (method, objeto) => ({
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(objeto)
+        });
+
+        document.addEventListener("DOMContentLoaded", async () => {
+            configurarMesAtual();
+            atualizarRelogio();
+            window.setInterval(atualizarRelogio, 1000);
+            try {
+                [registros, configuracoes] = await Promise.all([
+                    requisitarAPI("/api/registros"),
+                    requisitarAPI("/api/configuracoes")
+                ]);
+                carregarConfiguracoes();
+                atualizarTela();
+            } catch (erro) {
+                console.error(erro);
+                document.querySelectorAll("button, input, select").forEach(campo => { campo.disabled = true; });
+                mostrarMensagem("Não foi possível conectar ao servidor. Atualize a página para tentar novamente.");
+            }
+        });
+
+        
+
+        function normalizarRegistros(dados) {
+            if (!dados || typeof dados !== "object" || Array.isArray(dados)) return {};
+            const resultado = {};
+            for (const [data, origem] of Object.entries(dados)) {
+                if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || !origem || typeof origem !== "object") continue;
+                const registro = {};
+                for (const campo of CAMPOS_PONTO) {
+                    registro[campo] = horarioValido(origem[campo]) ? origem[campo] : null;
+                }
+                registro.extras = Array.isArray(origem.extras)
+                    ? origem.extras.filter(item => item && horarioValido(item.horario)).map(item => ({
+                        horario: item.horario,
+                        descricao: typeof item.descricao === "string" ? item.descricao : "Batida extra"
+                    }))
+                    : [];
+                resultado[data] = registro;
+            }
+            return resultado;
+        }
+
+        function horarioValido(valor) {
+            return typeof valor === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(valor);
+        }
+
+        function dataHoje() {
+            const agora = new Date();
+            return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+        }
+
+        function formatarData(data) {
+            const [ano, mes, dia] = data.split("-");
+            return `${dia}/${mes}/${ano}`;
+        }
+
+        function atualizarRelogio() {
+            const agora = new Date();
+            const relogio = document.getElementById("relogio");
+            const dataAtual = document.getElementById("dataAtual");
+            if (relogio) relogio.textContent = agora.toLocaleTimeString("pt-BR");
+            if (dataAtual) dataAtual.textContent = agora.toLocaleDateString("pt-BR", {
+                weekday: "long", day: "2-digit", month: "long", year: "numeric"
+            });
+        }
+
+        function configurarMesAtual() {
+            const filtro = document.getElementById("mesFiltro");
+            if (filtro && !filtro.value) filtro.value = dataHoje().slice(0, 7);
+        }
+
+        function carregarConfiguracoes() {
+            document.getElementById("jornadaDiaria").value = configuracoes.jornada || "08:00";
+            document.getElementById("inicioSemana").value = configuracoes.inicioSemana || "1";
+            document.getElementById("nomeFuncionario").value = configuracoes.nome || "";
+        }
+
+        async function salvarConfiguracoes() {
+            const anterior = { ...configuracoes };
+            const novas = {
+                jornada: document.getElementById("jornadaDiaria").value || "08:00",
+                inicioSemana: document.getElementById("inicioSemana").value,
+                nome: document.getElementById("nomeFuncionario").value.trim()
+            };
+            try {
+                configuracoes = await requisitarAPI("/api/configuracoes", jsonRequest("PUT", novas));
+                atualizarTela();
+                mostrarMensagem("Configurações salvas no SQLite!");
+            } catch (erro) {
+                configuracoes = anterior;
+                carregarConfiguracoes();
+                mostrarMensagem("Não foi possível salvar as configurações.");
+            }
+        }
+
+        
+
+        function criarRegistroSeNecessario(data = dataHoje()) {
+            if (!registros[data]) {
+                registros[data] = { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
+            }
+            if (!Array.isArray(registros[data].extras)) registros[data].extras = [];
+            return registros[data];
+        }
+
+        async function baterPonto() {
+            const data = dataHoje();
+            const anterior = registros[data] ? structuredClone(registros[data]) : null;
+            const registro = criarRegistroSeNecessario(data);
+            const horario = new Date().toTimeString().slice(0, 5);
+            const proximoCampo = CAMPOS_PONTO.find(campo => !registro[campo]);
+            if (proximoCampo) registro[proximoCampo] = horario;
+            else registro.extras.push({ horario, descricao: "Batida extra" });
+
+            const botao = document.getElementById("btnBaterPonto");
+            botao.disabled = true;
+            try {
+                if (!(await salvarDados(data))) {
+                    if (anterior) registros[data] = anterior;
+                    else delete registros[data];
+                    atualizarTela();
+                    return;
+                }
+                atualizarTela();
+                mostrarMensagem(`Ponto registrado às ${horario}`);
+            } finally {
+                botao.disabled = false;
+            }
+        }
+
+        async function salvarDados(data) {
+            try {
+                if (registros[data]) {
+                    registros[data] = await requisitarAPI(
+                        `/api/registros/${data}`,
+                        jsonRequest("PUT", registros[data])
+                    );
+                } else {
+                    await requisitarAPI(`/api/registros/${data}`, { method: "DELETE" });
+                }
+                return true;
+            } catch (erro) {
+                console.error(erro);
+                mostrarMensagem("Falha ao salvar no servidor. Os dados anteriores foram mantidos.");
+                return false;
+            }
+        }
+
+        
+
+        function minutosDeHorario(valor) {
+            if (!horarioValido(valor)) return null;
+            const [hora, minuto] = valor.split(":").map(Number);
+            return hora * 60 + minuto;
+        }
+
+        function minutosTrabalhados(registro) {
+            if (!registro) return 0;
+            const pares = registro.saidaAlmoco
+                ? [[registro.entrada, registro.saidaAlmoco], [registro.retornoAlmoco, registro.saida]]
+                : [[registro.entrada, registro.saida]];
+            return pares.reduce((total, [inicio, fim]) => {
+                let a = minutosDeHorario(inicio);
+                let b = minutosDeHorario(fim);
+                if (a === null || b === null) return total;
+                if (b < a) b += 24 * 60;
+                return total + (b - a);
+            }, 0);
+        }
+
+        function formatarDuracao(minutos) {
+            const sinal = minutos < 0 ? "-" : "";
+            const absoluto = Math.abs(Math.round(minutos));
+            return `${sinal}${String(Math.floor(absoluto / 60)).padStart(2, "0")}:${String(absoluto % 60).padStart(2, "0")}`;
+        }
+
+        // Um saldo só é definitivo quando a jornada tem entrada e saída.
+        // Se houve pausa para almoço, também precisamos das duas marcações.
+        function jornadaConcluida(registro) {
+            return Boolean(
+                registro?.entrada && registro.saida &&
+                ((!registro.saidaAlmoco && !registro.retornoAlmoco) ||
+                 (registro.saidaAlmoco && registro.retornoAlmoco))
+            );
+        }
+
+        function saldoDaJornada(registro, jornada) {
+            if (!registro?.entrada) return "Não iniciada";
+            if (!jornadaConcluida(registro)) return "Em andamento";
+            return formatarDuracao(minutosTrabalhados(registro) - jornada);
+        }
+
+        function saldoCalculado(registro, jornada) {
+            return jornadaConcluida(registro) ? minutosTrabalhados(registro) - jornada : null;
+        }
+
+        function atualizarTela() {
+            const hoje = dataHoje();
+            const registro = registros[hoje] || { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
+            for (const campo of CAMPOS_PONTO) {
+                const elemento = document.getElementById(campo);
+                if (elemento) elemento.textContent = registro[campo] || "--:--";
+                const sufixo = campo.charAt(0).toUpperCase() + campo.slice(1);
+                const botaoEditar = document.getElementById(`editar${sufixo}`);
+                const botaoApagar = document.getElementById(`apagar${sufixo}`);
+                if (botaoEditar) botaoEditar.hidden = !registro[campo];
+                if (botaoApagar) botaoApagar.hidden = !registro[campo];
+            }
+            renderizarExtrasHoje(registro.extras || []);
+            const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+            const trabalhado = minutosTrabalhados(registro);
+            document.getElementById("horasHoje").textContent = formatarDuracao(trabalhado);
+            document.getElementById("jornadaHoje").textContent = formatarDuracao(jornada);
+            const saldo = document.getElementById("saldoHoje");
+            const diferenca = saldoCalculado(registro, jornada);
+            saldo.textContent = saldoDaJornada(registro, jornada);
+            saldo.classList.toggle("saldo-positivo", diferenca !== null && diferenca > 0);
+            saldo.classList.toggle("saldo-negativo", diferenca !== null && diferenca < 0);
+            document.getElementById("quantidadeBatidas").textContent = String(CAMPOS_PONTO.filter(campo => registro[campo]).length + (registro.extras || []).length);
+            renderizarHistorico();
+        }
+
+        function renderizarExtrasHoje(extras) {
+            const lista = document.getElementById("extrasHoje");
+            lista.replaceChildren();
+            if (!extras.length) {
+                const vazio = document.createElement("p");
+                vazio.className = "sem-registro";
+                vazio.textContent = "Nenhuma batida extra.";
+                lista.appendChild(vazio);
+                return;
+            }
+            extras.forEach((item, indice) => {
+                const linha = document.createElement("div");
+                linha.className = "extra-item";
+                const descricao = document.createElement("span");
+                descricao.textContent = `${item.horario} — ${item.descricao || "Batida extra"}`;
+                const acoes = document.createElement("div");
+                acoes.className = "extra-acoes";
+                const editar = document.createElement("button");
+                editar.type = "button";
+                editar.className = "btn btn-azul";
+                editar.textContent = "Editar";
+                editar.addEventListener("click", () => abrirModalExtra(dataHoje(), indice));
+                const excluir = document.createElement("button");
+                excluir.type = "button";
+                excluir.className = "btn btn-vermelho";
+                excluir.textContent = "Excluir";
+                excluir.addEventListener("click", () => excluirBatidaExtra(dataHoje(), indice));
+                linha.appendChild(descricao);
+                acoes.append(editar, excluir);
+                linha.appendChild(acoes);
+                lista.appendChild(linha);
+            });
+        }
+
+        function renderizarHistorico() {
+            const corpo = document.getElementById("tabelaHistorico");
+            if (!corpo) return;
+            corpo.replaceChildren();
+            const mes = document.getElementById("mesFiltro").value;
+            const datas = Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort((a, b) => b.localeCompare(a));
+            if (!datas.length) {
+                const linha = document.createElement("tr");
+                const celula = document.createElement("td");
+                celula.colSpan = 9;
+                celula.className = "sem-registro";
+                celula.textContent = "Nenhum registro neste mês.";
+                linha.appendChild(celula);
+                corpo.appendChild(linha);
+                return;
+            }
+            for (const data of datas) {
+                const registro = registros[data];
+                const linha = document.createElement("tr");
+                const extras = (registro.extras || []).map(item => `${item.horario} (${item.descricao || "Batida extra"})`).join("; ") || "—";
+                const trabalhado = minutosTrabalhados(registro);
+                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                const saldo = saldoCalculado(registro, jornada);
+                const valores = [formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—", registro.retornoAlmoco || "—", registro.saida || "—", extras, formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)];
+                valores.forEach((valor, indice) => {
+                    const celula = document.createElement("td");
+                    celula.textContent = valor;
+                    if (indice === 7 && saldo !== null && saldo !== 0) celula.className = saldo > 0 ? "saldo-positivo" : "saldo-negativo";
+                    linha.appendChild(celula);
+                });
+                const acoes = document.createElement("td");
+                const editar = document.createElement("button");
+                editar.className = "btn btn-azul";
+                editar.textContent = "Editar";
+                editar.addEventListener("click", () => abrirEdicao(data));
+                const excluir = document.createElement("button");
+                excluir.type = "button";
+                excluir.className = "btn btn-vermelho";
+                excluir.textContent = "Excluir dia";
+                excluir.style.marginLeft = "6px";
+                excluir.addEventListener("click", () => excluirRegistro(data));
+                const gerenciarExtras = document.createElement("button");
+                gerenciarExtras.type = "button";
+                gerenciarExtras.className = "btn btn-secundario";
+                gerenciarExtras.textContent = `Extras (${(registro.extras || []).length})`;
+                gerenciarExtras.style.marginLeft = "6px";
+                gerenciarExtras.addEventListener("click", () => abrirModalExtra(data));
+                acoes.append(editar, excluir, gerenciarExtras);
+                linha.appendChild(acoes);
+                corpo.appendChild(linha);
+            }
+        }
+
+        function editarBatidaHoje(campo) {
+            abrirEdicao(dataHoje(), campo);
+        }
+
+        function abrirEdicao(data, campoFoco = null) {
+            const registro = registros[data];
+            if (!registro) return;
+            document.getElementById("dataEdicao").value = data;
+            document.getElementById("editEntrada").value = registro.entrada || "";
+            document.getElementById("editSaidaAlmoco").value = registro.saidaAlmoco || "";
+            document.getElementById("editRetorno").value = registro.retornoAlmoco || "";
+            document.getElementById("editSaida").value = registro.saida || "";
+            document.getElementById("modalEdicao").style.display = "flex";
+            if (campoFoco) {
+                const ids = { entrada: "editEntrada", saidaAlmoco: "editSaidaAlmoco", retornoAlmoco: "editRetorno", saida: "editSaida" };
+                setTimeout(() => document.getElementById(ids[campoFoco])?.focus(), 0);
+            }
+        }
+
+        function fecharModalEdicao() {
+            document.getElementById("modalEdicao").style.display = "none";
+        }
+
+        async function salvarEdicao() {
+            const data = document.getElementById("dataEdicao").value;
+            if (!registros[data]) return;
+            const anterior = structuredClone(registros[data]);
+            const campos = [["entrada", "editEntrada"], ["saidaAlmoco", "editSaidaAlmoco"], ["retornoAlmoco", "editRetorno"], ["saida", "editSaida"]];
+            const alteracoes = {};
+            for (const [campo, id] of campos) {
+                const valor = document.getElementById(id).value;
+                if (valor && !horarioValido(valor)) {
+                    mostrarMensagem("Confira os horários informados.");
+                    return;
+                }
+                alteracoes[campo] = valor || null;
+            }
+            Object.assign(registros[data], alteracoes);
+            removerRegistroSeVazio(data);
+            if (!(await salvarDados(data))) {
+                registros[data] = anterior;
+                atualizarTela();
+                return;
+            }
+            fecharModalEdicao();
+            atualizarTela();
+            mostrarMensagem("Registro atualizado.");
+        }
+
+        
+
+        function removerRegistroSeVazio(data) {
+            const registro = registros[data];
+            if (!registro) return;
+            const temBatidaPrincipal = CAMPOS_PONTO.some(campo => registro[campo]);
+            const temExtra = Array.isArray(registro.extras) && registro.extras.length > 0;
+            if (!temBatidaPrincipal && !temExtra) delete registros[data];
+        }
+
+        async function excluirRegistro(data) {
+            if (!window.confirm(`Excluir o registro de ${formatarData(data)}? Essa ação não pode ser desfeita.`)) return;
+            const anterior = registros[data];
+            delete registros[data];
+            if (!(await salvarDados(data))) {
+                if (anterior) registros[data] = anterior;
+                atualizarTela();
+                return;
+            }
+            atualizarTela();
+            mostrarMensagem("Registro excluído.");
+        }
+
+        
+
+        function excluirBatidaHoje(campo) {
+            excluirBatida(dataHoje(), campo);
+        }
+
+        async function excluirBatidaEmEdicao(campo) {
+            const data = document.getElementById("dataEdicao").value;
+            const alterado = await excluirBatida(data, campo);
+            if (!alterado) return;
+            if (registros[data]) {
+                const ids = { entrada: "editEntrada", saidaAlmoco: "editSaidaAlmoco", retornoAlmoco: "editRetorno", saida: "editSaida" };
+                document.getElementById(ids[campo]).value = registros[data][campo] || "";
+            } else {
+                fecharModalEdicao();
+            }
+        }
+
+        async function excluirBatida(data, campo) {
+            const registro = registros[data];
+            if (!registro || !CAMPOS_PONTO.includes(campo) || !registro[campo]) return false;
+            const nomes = { entrada: "Entrada", saidaAlmoco: "Saída do almoço", retornoAlmoco: "Retorno do almoço", saida: "Saída" };
+            if (!window.confirm(`Excluir ${nomes[campo]} (${registro[campo]}) de ${formatarData(data)}?`)) return false;
+            const anterior = structuredClone(registro);
+            registro[campo] = null;
+            removerRegistroSeVazio(data);
+            if (!(await salvarDados(data))) {
+                registros[data] = anterior;
+                atualizarTela();
+                return false;
+            }
+            atualizarTela();
+            mostrarMensagem("Batida excluída.");
+            return true;
+        }
+
+        
+
+        function renderizarListaExtrasModal(data) {
+            const lista = document.getElementById("listaExtrasModal");
+            lista.replaceChildren();
+            const extras = registros[data]?.extras || [];
+            if (!extras.length) {
+                const vazio = document.createElement("p");
+                vazio.className = "sem-registro";
+                vazio.textContent = "Nenhuma batida extra neste dia.";
+                lista.appendChild(vazio);
+                return;
+            }
+            extras.forEach((item, indice) => {
+                const linha = document.createElement("div");
+                linha.className = "extra-item";
+                const texto = document.createElement("span");
+                texto.textContent = `${item.horario} — ${item.descricao || "Batida extra"}`;
+                const acoes = document.createElement("div");
+                acoes.className = "extra-acoes";
+                const editar = document.createElement("button");
+                editar.type = "button";
+                editar.className = "btn btn-azul";
+                editar.textContent = "Editar";
+                editar.addEventListener("click", () => abrirModalExtra(data, indice));
+                const excluir = document.createElement("button");
+                excluir.type = "button";
+                excluir.className = "btn btn-vermelho";
+                excluir.textContent = "Excluir";
+                excluir.addEventListener("click", () => excluirBatidaExtra(data, indice));
+                linha.append(texto, acoes);
+                acoes.append(editar, excluir);
+                lista.appendChild(linha);
+            });
+        }
+
+        function abrirModalExtra(data = dataHoje(), indice = null) {
+            const registro = registros[data];
+            const extra = indice === null ? null : registro?.extras?.[indice];
+            document.getElementById("dataExtra").value = data;
+            document.getElementById("dataModalExtra").textContent = `Data: ${formatarData(data)}`;
+            document.getElementById("tituloModalExtra").textContent = "Gerenciar batidas extras";
+            document.getElementById("indiceExtra").value = extra ? String(indice) : "";
+            document.getElementById("horarioExtra").value = extra?.horario || new Date().toTimeString().slice(0, 5);
+            document.getElementById("descricaoExtra").value = extra?.descricao || "";
+            document.getElementById("textoBotaoExtra").textContent = extra ? "Salvar alterações" : "Adicionar batida";
+            renderizarListaExtrasModal(data);
+            document.getElementById("modalExtra").style.display = "flex";
+        }
+
+        function fecharModalExtra() {
+            document.getElementById("modalExtra").style.display = "none";
+        }
+
+        async function salvarBatidaExtra() {
+            const data = document.getElementById("dataExtra").value || dataHoje();
+            const horario = document.getElementById("horarioExtra").value;
+            if (!horarioValido(horario)) {
+                mostrarMensagem("Informe um horário válido.");
+                return;
+            }
+            const descricao = document.getElementById("descricaoExtra").value.trim() || "Batida extra";
+            const indiceTexto = document.getElementById("indiceExtra").value;
+            const indice = indiceTexto === "" ? null : Number(indiceTexto);
+            const anterior = registros[data] ? structuredClone(registros[data]) : null;
+            if (indice !== null && !registros[data]?.extras?.[indice]) {
+                mostrarMensagem("Esta batida extra não foi encontrada.");
+                return;
+            }
+            const registro = criarRegistroSeNecessario(data);
+            if (indice === null) registro.extras.push({ horario, descricao });
+            else registro.extras[indice] = { horario, descricao };
+            if (!(await salvarDados(data))) {
+                if (anterior) registros[data] = anterior;
+                else delete registros[data];
+                atualizarTela();
+                return;
+            }
+            fecharModalExtra();
+            atualizarTela();
+            mostrarMensagem(indice === null ? "Batida extra adicionada." : "Batida extra atualizada.");
+        }
+
+        
+
+        async function excluirBatidaExtra(data, indice) {
+            const registro = registros[data];
+            if (!registro || !registro.extras?.[indice]) return;
+            const extraAnterior = registro.extras[indice];
+            if (!window.confirm(`Excluir a batida extra das ${extraAnterior.horario} em ${formatarData(data)}?`)) return;
+            const anterior = structuredClone(registro);
+            registro.extras.splice(indice, 1);
+            removerRegistroSeVazio(data);
+            if (!(await salvarDados(data))) {
+                registros[data] = anterior;
+                atualizarTela();
+                return;
+            }
+            atualizarTela();
+            if (document.getElementById("modalExtra").style.display === "flex") abrirModalExtra(data);
+            mostrarMensagem("Batida extra excluída.");
+        }
+
+        
+
+        function baixarArquivo(nome, conteudo, tipo) {
+            const arquivo = new Blob([conteudo], { type: tipo });
+            const url = URL.createObjectURL(arquivo);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = nome;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function exportarJSON() {
+            const backup = { versao: 1, exportadoEm: new Date().toISOString(), configuracoes, registros };
+            baixarArquivo(`backup-meu-ponto-${dataHoje()}.json`, JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
+            mostrarMensagem("Backup JSON baixado.");
+        }
+
+        function exportarCSV() {
+            const mes = document.getElementById("mesFiltro").value;
+            const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo"]];
+            Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
+                const registro = registros[data];
+                const trabalhado = minutosTrabalhados(registro);
+                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)]);
+            });
+            const csv = "\uFEFF" + linhas.map(linha => linha.map(valor => `"${String(valor).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+            baixarArquivo(`meu-ponto-${mes || dataHoje().slice(0, 7)}.csv`, csv, "text/csv;charset=utf-8");
+            mostrarMensagem("Arquivo CSV baixado.");
+        }
+
+        async function importarJSON(evento) {
+            evento.target.value = "";
+            mostrarMensagem("Restauração de backup ainda não está disponível nesta demonstração.");
+        }
+
+        
+
+        function mostrarMensagem(texto) {
+            const elemento = document.getElementById("mensagem");
+            if (!elemento) return;
+            elemento.textContent = texto;
+            elemento.style.display = "block";
+            if (mensagemTimer) clearTimeout(mensagemTimer);
+            mensagemTimer = setTimeout(() => { elemento.style.display = "none"; }, 3000);
+        }
+
+    </script>
+</body>
+</html>
