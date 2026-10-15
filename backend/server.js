@@ -108,6 +108,32 @@ app.delete("/api/registros/:data", (req, res) => {
   res.status(204).end();
 });
 
+const buscarConfiguracoes = db.prepare("SELECT nome, jornada, inicioSemana FROM configuracoes WHERE id = 1");
+const salvarConfiguracoes = db.prepare(
+  "UPDATE configuracoes SET nome = ?, jornada = ?, inicioSemana = ? WHERE id = 1"
+);
+
+app.get("/api/configuracoes", (req, res) => {
+  res.json(buscarConfiguracoes.get());
+});
+
+app.put("/api/configuracoes", (req, res) => {
+  const dados = req.body;
+  const valido = dados && typeof dados === "object" && !Array.isArray(dados)
+    && typeof dados.nome === "string"
+    && horarioValido(dados.jornada)
+    && (dados.inicioSemana === "0" || dados.inicioSemana === "1");
+
+  if (!valido) {
+    return res.status(400).json({
+      erro: "Configurações inválidas. Informe nome (texto), jornada (HH:mm) e inicioSemana (0 ou 1)."
+    });
+  }
+
+  salvarConfiguracoes.run(dados.nome, dados.jornada, dados.inicioSemana);
+  res.json(buscarConfiguracoes.get());
+});
+
 app.use((erro, req, res, next) => {
   if (erro.status === 400) return res.status(400).json({ erro: "JSON inválido." });
   console.error(erro);
