@@ -66,7 +66,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                     requisitarAPI("/api/registros"),
                     requisitarAPI("/api/configuracoes")
                 ]);
-                if (!dadosServidor || !configServidor) throw new Error("Dados incompletos do servidor.");
+                if (!dadosServidor || !configRemota) throw new Error("Dados incompletos do servidor.");
                 let dados = normalizarRegistros(dadosServidor);
                 let configServidor = configRemota;
 
