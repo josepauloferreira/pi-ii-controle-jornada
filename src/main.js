@@ -165,6 +165,25 @@ const STORAGE_PONTO = "meu_ponto_registros";
             return `${sinal}${String(Math.floor(absoluto / 60)).padStart(2, "0")}:${String(absoluto % 60).padStart(2, "0")}`;
         }
 
+        // Não calculamos saldo definitivo enquanto a jornada estiver incompleta.
+        function jornadaConcluida(registro) {
+            return Boolean(
+                registro?.entrada && registro.saida &&
+                ((!registro.saidaAlmoco && !registro.retornoAlmoco) ||
+                 (registro.saidaAlmoco && registro.retornoAlmoco))
+            );
+        }
+
+        function saldoDaJornada(registro, jornada) {
+            if (!registro?.entrada) return "Não iniciada";
+            if (!jornadaConcluida(registro)) return "Em andamento";
+            return formatarDuracao(minutosTrabalhados(registro) - jornada);
+        }
+
+        function saldoCalculado(registro, jornada) {
+            return jornadaConcluida(registro) ? minutosTrabalhados(registro) - jornada : null;
+        }
+
         function atualizarTela() {
             const hoje = dataHoje();
             const registro = registros[hoje] || { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
@@ -183,9 +202,10 @@ const STORAGE_PONTO = "meu_ponto_registros";
             document.getElementById("horasHoje").textContent = formatarDuracao(trabalhado);
             document.getElementById("jornadaHoje").textContent = formatarDuracao(jornada);
             const saldo = document.getElementById("saldoHoje");
-            saldo.textContent = formatarDuracao(trabalhado - jornada);
-            saldo.classList.toggle("saldo-positivo", trabalhado - jornada > 0);
-            saldo.classList.toggle("saldo-negativo", trabalhado - jornada < 0);
+            const diferenca = saldoCalculado(registro, jornada);
+            saldo.textContent = saldoDaJornada(registro, jornada);
+            saldo.classList.toggle("saldo-positivo", diferenca !== null && diferenca > 0);
+            saldo.classList.toggle("saldo-negativo", diferenca !== null && diferenca < 0);
             document.getElementById("quantidadeBatidas").textContent = String(CAMPOS_PONTO.filter(campo => registro[campo]).length + (registro.extras || []).length);
             renderizarHistorico();
         }
@@ -245,12 +265,13 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 const linha = document.createElement("tr");
                 const extras = (registro.extras || []).map(item => `${item.horario} (${item.descricao || "Batida extra"})`).join("; ") || "—";
                 const trabalhado = minutosTrabalhados(registro);
-                const saldo = trabalhado - (minutosDeHorario(configuracoes.jornada) || 480);
-                const valores = [formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—", registro.retornoAlmoco || "—", registro.saida || "—", extras, formatarDuracao(trabalhado), formatarDuracao(saldo)];
+                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                const saldo = saldoCalculado(registro, jornada);
+                const valores = [formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—", registro.retornoAlmoco || "—", registro.saida || "—", extras, formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)];
                 valores.forEach((valor, indice) => {
                     const celula = document.createElement("td");
                     celula.textContent = valor;
-                    if (indice === 7 && saldo !== 0) celula.className = saldo > 0 ? "saldo-positivo" : "saldo-negativo";
+                    if (indice === 7 && saldo !== null && saldo !== 0) celula.className = saldo > 0 ? "saldo-positivo" : "saldo-negativo";
                     linha.appendChild(celula);
                 });
                 const acoes = document.createElement("td");
@@ -503,8 +524,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
             Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
                 const registro = registros[data];
                 const trabalhado = minutosTrabalhados(registro);
-                const saldo = trabalhado - (minutosDeHorario(configuracoes.jornada) || 480);
-                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), formatarDuracao(saldo)]);
+                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)]);
             });
             const csv = "\uFEFF" + linhas.map(linha => linha.map(valor => `"${String(valor).replace(/"/g, '""')}"`).join(";")).join("\r\n");
             baixarArquivo(`meu-ponto-${mes || dataHoje().slice(0, 7)}.csv`, csv, "text/csv;charset=utf-8");
