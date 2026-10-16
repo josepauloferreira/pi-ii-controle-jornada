@@ -413,7 +413,7 @@ async function baterPonto() {
             document.getElementById("modalEdicao").style.display = "none";
         }
 
-        function salvarEdicao() {
+        async function salvarEdicao() {
             const data = document.getElementById("dataEdicao").value;
             if (!registros[data]) return;
             const anterior = { ...registros[data] };
@@ -427,7 +427,7 @@ async function baterPonto() {
                 registros[data][campo] = valor || null;
             }
             removerRegistroSeVazio(data);
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 registros[data] = anterior;
                 atualizarTela();
                 return;
@@ -445,11 +445,11 @@ async function baterPonto() {
             if (!temBatidaPrincipal && !temExtra) delete registros[data];
         }
 
-        function excluirRegistro(data) {
+        async function excluirRegistro(data) {
             if (!window.confirm(`Excluir o registro de ${formatarData(data)}? Essa ação não pode ser desfeita.`)) return;
             const anterior = registros[data];
             delete registros[data];
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 if (anterior) registros[data] = anterior;
                 atualizarTela();
                 return;
@@ -462,9 +462,9 @@ async function baterPonto() {
             excluirBatida(dataHoje(), campo);
         }
 
-        function excluirBatidaEmEdicao(campo) {
+        async function excluirBatidaEmEdicao(campo) {
             const data = document.getElementById("dataEdicao").value;
-            excluirBatida(data, campo);
+            if (!(await excluirBatida(data, campo))) return;
             if (registros[data]) {
                 const ids = { entrada: "editEntrada", saidaAlmoco: "editSaidaAlmoco", retornoAlmoco: "editRetorno", saida: "editSaida" };
                 document.getElementById(ids[campo]).value = registros[data][campo] || "";
@@ -473,7 +473,7 @@ async function baterPonto() {
             }
         }
 
-        function excluirBatida(data, campo) {
+        async function excluirBatida(data, campo) {
             const registro = registros[data];
             if (!registro || !CAMPOS_PONTO.includes(campo) || !registro[campo]) return;
             const nomes = { entrada: "Entrada", saidaAlmoco: "Saída do almoço", retornoAlmoco: "Retorno do almoço", saida: "Saída" };
@@ -481,7 +481,7 @@ async function baterPonto() {
             const horarioAnterior = registro[campo];
             registro[campo] = null;
             removerRegistroSeVazio(data);
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 if (!registros[data]) registros[data] = { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
                 registros[data][campo] = horarioAnterior;
                 atualizarTela();
@@ -489,6 +489,7 @@ async function baterPonto() {
             }
             atualizarTela();
             mostrarMensagem("Batida excluída.");
+            return true;
         }
 
         function renderizarListaExtrasModal(data) {
@@ -543,7 +544,7 @@ async function baterPonto() {
             document.getElementById("modalExtra").style.display = "none";
         }
 
-        function salvarBatidaExtra() {
+        async function salvarBatidaExtra() {
             const data = document.getElementById("dataExtra").value || dataHoje();
             const horario = document.getElementById("horarioExtra").value;
             if (!horarioValido(horario)) {
@@ -564,7 +565,7 @@ async function baterPonto() {
             } else {
                 registro.extras[indice] = { horario, descricao };
             }
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 if (anterior) registros[data] = anterior;
                 else delete registros[data];
                 atualizarTela();
@@ -575,7 +576,7 @@ async function baterPonto() {
             mostrarMensagem(indice === null ? "Batida extra adicionada." : "Batida extra atualizada.");
         }
 
-        function excluirBatidaExtra(data, indice) {
+        async function excluirBatidaExtra(data, indice) {
             const registro = registros[data];
             if (!registro || !registro.extras?.[indice]) return;
             const extraAnterior = registro.extras[indice];
@@ -583,7 +584,7 @@ async function baterPonto() {
             const copiaAnterior = { ...registro, extras: [...registro.extras] };
             registro.extras.splice(indice, 1);
             removerRegistroSeVazio(data);
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 registros[data] = copiaAnterior;
                 atualizarTela();
                 return;
@@ -633,7 +634,16 @@ async function baterPonto() {
                 const registrosImportados = normalizarRegistros(conteudo.registros || conteudo);
                 if (!Object.keys(registrosImportados).length) throw new Error("O arquivo não contém registros válidos.");
                 if (!window.confirm("Restaurar este backup substituirá os registros atuais neste navegador. Deseja continuar?")) return;
+                // Restaurar histórico sem substituir o ponto atual do SQLite.
+                const hoje = dataHoje();
+                if (registrosImportados[hoje] && !window.confirm(
+                    "O backup contém batidas de hoje. Deseja restaurar apenas os dias anteriores, " +
+                    "sem alterar o ponto atual que está no SQLite?"
+                )) return;
+                const registroServidorHoje = registros[hoje];
                 registros = registrosImportados;
+                if (registroServidorHoje) registros[hoje] = registroServidorHoje;
+                else delete registros[hoje];
                 if (conteudo.configuracoes && typeof conteudo.configuracoes === "object") {
                     configuracoes = {
                         jornada: horarioValido(conteudo.configuracoes.jornada) ? conteudo.configuracoes.jornada : "08:00",
@@ -643,9 +653,9 @@ async function baterPonto() {
                     localStorage.setItem(STORAGE_CONFIG, JSON.stringify(configuracoes));
                     carregarConfiguracoes();
                 }
-                salvarDados();
+                if (!(await salvarDados())) throw new Error("Falha ao restaurar o histórico local.");
                 atualizarTela();
-                mostrarMensagem("Backup restaurado.");
+                mostrarMensagem("Histórico local restaurado. Ponto atual preservado no SQLite.");
             } catch (erro) {
                 console.error(erro);
                 mostrarMensagem("Não foi possível importar. Selecione um backup JSON válido.");
