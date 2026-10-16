@@ -9,14 +9,14 @@ Aplicação web para registrar e acompanhar a jornada de trabalho em home office
 - [x] [1. Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
 - [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
 - [x] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
-- [ ] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
+- [x] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
 - [ ] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
 
 As etapas 1 e 2 podem ser desenvolvidas em paralelo. A etapa 3 depende das duas primeiras, e a etapa 4 depende da terceira.
 
 **Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
 
-**Em andamento:** issue #16 — conectar histórico, configurações, exportação e restauração ao SQLite. Refinamento visual permanece na issue #18.
+**Concluído nesta branch:** histórico, configurações, exportação e restauração com SQLite (#16). **Pendente:** refinamento visual (#18).
 
 
 ## O que o sistema faz
