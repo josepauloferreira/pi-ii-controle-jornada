@@ -6,7 +6,7 @@ const app = express();
 const porta = Number(process.env.PORT) || 3000;
 const campos = ["entrada", "saidaAlmoco", "retornoAlmoco", "saida"];
 
-app.use(express.json());
+app.use(express.json({ limit: "2mb" }));
 
 function dataValida(data) {
   if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
@@ -140,8 +140,51 @@ app.put("/api/configuracoes", (req, res) => {
   res.json(buscarConfiguracoes.get());
 });
 
+
+// Restauração completa em transação: falha na validação não altera o banco.
+const restaurarBackup = db.transaction((backup) => {
+  db.prepare("DELETE FROM registros").run();
+  for (const [data, registro] of Object.entries(backup.registros)) {
+    const extras = registro.extras.map(extra => ({
+      horario: extra.horario,
+      descricao: extra.descricao ?? "Batida extra"
+    }));
+    salvarDia.run(
+      data, registro.entrada, registro.saidaAlmoco,
+      registro.retornoAlmoco, registro.saida, JSON.stringify(extras)
+    );
+  }
+  if (backup.configuracoes) {
+    const config = backup.configuracoes;
+    salvarConfiguracoes.run(config.nome, config.jornada, config.inicioSemana);
+  }
+});
+
+app.put("/api/backup", (req, res) => {
+  const backup = req.body;
+  const registros = backup?.registros;
+  const config = backup?.configuracoes;
+  const registrosValidos = registros && typeof registros === "object"
+    && !Array.isArray(registros)
+    && Object.entries(registros).every(([data, registro]) => dataValida(data) && registroValido(registro));
+  const configValida = config === undefined || (
+    config && typeof config === "object" && !Array.isArray(config)
+    && typeof config.nome === "string"
+    && horarioValido(config.jornada)
+    && (config.inicioSemana === "0" || config.inicioSemana === "1")
+  );
+
+  if (!registrosValidos || !configValida) {
+    return res.status(400).json({ erro: "Backup inválido. Confira registros e configurações." });
+  }
+
+  restaurarBackup(backup);
+  res.json({ registros: Object.keys(registros).length });
+});
+
 app.use((erro, req, res, next) => {
   if (erro.status === 400) return res.status(400).json({ erro: "JSON inválido." });
+  if (erro.status === 413) return res.status(413).json({ erro: "Backup excede o limite de 2 MB." });
   console.error(erro);
   res.status(500).json({ erro: "Erro interno no servidor." });
 });
