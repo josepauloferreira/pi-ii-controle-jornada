@@ -50,9 +50,16 @@ const STORAGE_PONTO = "meu_ponto_registros";
             csrfToken = null;
             pontoServidorPronto = false;
             registros = {};
+            configuracoes = { nome: "", jornada: "08:00", inicioSemana: "1" };
             document.getElementById("btnBaterPonto").disabled = true;
             document.getElementById("senhaModal").style.display = "none";
+            document.getElementById("modalExtra").style.display = "none";
+            document.getElementById("modalEdicao").style.display = "none";
+            document.getElementById("usuarioAtual").textContent = "";
+            document.getElementById("nomeFuncionario").value = "";
             document.getElementById("appView").hidden = true;
+            // Limpa dados exibidos em uma sessão anterior no navegador compartilhado.
+            atualizarTela();
         }
 
         async function iniciarAcesso() {
