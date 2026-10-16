@@ -12,10 +12,40 @@
 
 <body>
 
+    <section id="authView" class="auth-screen" hidden aria-labelledby="authTitle">
+        <div class="auth-card">
+            <p class="auth-brand">Meu Ponto</p>
+            <h1 id="authTitle">Entre na sua conta.</h1>
+            <p id="authDescription">Acesse seus registros de jornada.</p>
+            <form id="authForm">
+                <div class="campo">
+                    <label for="authUsuario">Usuário</label>
+                    <input id="authUsuario" name="username" autocomplete="username" maxlength="40" required>
+                </div>
+                <div class="campo">
+                    <label for="authSenha">Senha</label>
+                    <input id="authSenha" type="password" name="password" autocomplete="current-password" required minlength="12">
+                </div>
+                <div class="campo" id="confirmarSenhaCampo" hidden>
+                    <label for="authConfirmarSenha">Confirmar senha</label>
+                    <input id="authConfirmarSenha" type="password" autocomplete="new-password">
+                </div>
+                <button class="btn btn-azul auth-submit" id="authSubmit" type="submit">Entrar</button>
+                <p id="authError" class="auth-error" role="alert"></p>
+            </form>
+        </div>
+    </section>
+
+    <div id="appView" hidden>
     <header>
         <div class="container">
             <h1>Meu Ponto</h1>
             <p>Controle de jornada - Home Office</p>
+            <div class="account-actions">
+                <span id="usuarioAtual"></span>
+                <button type="button" id="btnTrocarSenha" class="btn btn-secundario">Trocar senha</button>
+                <button type="button" id="btnSair" class="btn btn-secundario">Sair</button>
+            </div>
         </div>
     </header>
 
@@ -341,10 +371,33 @@
     </div>
 
 
+    <div class="modal" id="senhaModal" role="dialog" aria-modal="true" aria-labelledby="senhaModalTitulo">
+        <div class="modal-content">
+            <h2 id="senhaModalTitulo">Trocar senha</h2>
+            <form id="senhaForm">
+                <div class="campo">
+                    <label for="senhaAtual">Senha atual</label>
+                    <input id="senhaAtual" type="password" autocomplete="current-password" required>
+                </div>
+                <div class="campo">
+                    <label for="senhaNova">Nova senha (mínimo de 12 caracteres)</label>
+                    <input id="senhaNova" type="password" autocomplete="new-password" minlength="12" required>
+                </div>
+                <p class="auth-error" id="senhaError" role="alert"></p>
+                <div class="modal-acoes">
+                    <button type="button" id="cancelarSenha" class="btn btn-secundario">Cancelar</button>
+                    <button type="submit" id="salvarSenha" class="btn btn-azul">Salvar nova senha</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div class="mensagem" id="mensagem" role="status" aria-live="polite">
         Registro salvo!
     </div>
 
+
+    </div><!-- appView -->
 
     <script type="module" src="/src/main.js"></script>
 </body>
