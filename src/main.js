@@ -1,7 +1,7 @@
 const STORAGE_PONTO = "meu_ponto_registros";
         const STORAGE_CONFIG = "meu_ponto_config";
         const CAMPOS_PONTO = ["entrada", "saidaAlmoco", "retornoAlmoco", "saida"];
-        let registros = carregarRegistros();
+        let registros = {};
         let configuracoes = carregarConfiguracoesLocais();
         let mensagemTimer = null;
         let pontoServidorPronto = false;
@@ -14,21 +14,29 @@ const STORAGE_PONTO = "meu_ponto_registros";
             window.setInterval(atualizarRelogio, 1000);
             atualizarTela();
             document.getElementById("btnBaterPonto").disabled = true;
-            void carregarPontoHoje();
+            document.getElementById("btnBackupLocal").addEventListener("click", exportarBackupLocal);
+            void carregarDadosIniciais();
         });
 
-// Hoje utiliza o SQLite; os dias anteriores ainda são locais (issue #16).
-        async function requisitarRegistro(data, opcoes = {}) {
-            const resposta = await fetch(`/api/registros/${data}`, opcoes);
-            if (resposta.status === 404 && !opcoes.method) return null;
+// O SQLite é a fonte dos registros e das configurações.
+        async function requisitarAPI(caminho, opcoes = {}) {
+            const resposta = await fetch(caminho, opcoes);
+            const metodo = opcoes.method || "GET";
+            if (resposta.status === 404 && (metodo === "DELETE" || (metodo === "GET" && caminho.startsWith("/api/registros/")))) {
+                return null;
+            }
             if (!resposta.ok) {
                 const corpo = await resposta.json().catch(() => ({}));
-                throw new Error(corpo.erro || "Falha na comunicação com o servidor.");
+                throw new Error(corpo.erro || "Não foi possível comunicar com o servidor.");
             }
             return resposta.status === 204 ? null : resposta.json();
         }
 
-        async function salvarRegistroNoServidor(data, registro) {
+        function requisitarRegistro(data, opcoes = {}) {
+            return requisitarAPI(`/api/registros/${data}`, opcoes);
+        }
+
+        function salvarRegistroNoServidor(data, registro) {
             return requisitarRegistro(data, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -36,36 +44,72 @@ const STORAGE_PONTO = "meu_ponto_registros";
             });
         }
 
-        async function carregarPontoHoje() {
-            const hoje = dataHoje();
+        function exportarBackupLocal() {
+            const antigos = carregarRegistros();
+            const backup = {
+                versao: 1, exportadoEm: new Date().toISOString(),
+                configuracoes: carregarConfiguracoesLocais(), registros: antigos
+            };
+            baixarArquivo(
+                `backup-local-antigo-${dataHoje()}.json`,
+                JSON.stringify(backup, null, 2),
+                "application/json;charset=utf-8"
+            );
+        }
+
+        async function carregarDadosIniciais({ oferecerMigracao = true } = {}) {
+            pontoServidorPronto = false;
+            document.getElementById("btnBaterPonto").disabled = true;
+
             try {
-                const remoto = await requisitarRegistro(hoje);
-                if (remoto) {
-                    if (registros[hoje] && JSON.stringify(registros[hoje]) !== JSON.stringify(remoto)) {
-                        mostrarMensagem("Ponto carregado do SQLite. O registro local anterior foi preservado no navegador.");
-                    }
-                    registros[hoje] = remoto;
-                } else if (registros[hoje]) {
-                    if (!window.confirm(
-                        "Há batidas de hoje salvas apenas neste navegador. Deseja copiá-las para o SQLite? " +
-                        "Clique em Cancelar se preferir fazer um backup JSON antes."
-                    )) {
-                        mostrarMensagem("Ponto não conectado. Faça um backup e atualize a página para migrar.");
-                        return;
-                    }
-                    registros[hoje] = await salvarRegistroNoServidor(hoje, registros[hoje]);
-                } else {
-                    delete registros[hoje];
+                const [dadosServidor, configServidor] = await Promise.all([
+                    requisitarAPI("/api/registros"),
+                    requisitarAPI("/api/configuracoes")
+                ]);
+                if (!dadosServidor || !configServidor) throw new Error("Dados incompletos do servidor.");
+                let dados = normalizarRegistros(dadosServidor);
+
+                const locais = carregarRegistros();
+                if (Object.keys(locais).length) {
+                    document.getElementById("btnBackupLocal").style.display = "inline-block";
                 }
+
+                const faltantes = Object.keys(locais).filter(data => !Object.hasOwn(dados, data));
+                if (oferecerMigracao && faltantes.length && !localStorage.getItem("meu_ponto_backup_restaurado")) {
+                    if (window.confirm(
+                        `Foram encontrados ${faltantes.length} dia(s) no navegador que não estão no SQLite. ` +
+                        "Deseja copiá-los para o banco? Dias já existentes no banco não serão substituídos. " +
+                        "Se preferir, cancele e baixe o backup local antigo."
+                    )) {
+                        for (const data of faltantes) {
+                            // Revalida antes de gravar, para preservar dias criados após o carregamento.
+                            const atual = await requisitarRegistro(data);
+                            if (!atual) await salvarRegistroNoServidor(data, locais[data]);
+                        }
+                        dados = normalizarRegistros(await requisitarAPI("/api/registros"));
+                    }
+                }
+                const conflitantes = Object.keys(locais).filter(data =>
+                    Object.hasOwn(dados, data) && JSON.stringify(dados[data]) !== JSON.stringify(locais[data])
+                );
+
+                registros = dados;
+                configuracoes = configServidor;
                 pontoServidorPronto = true;
+                carregarConfiguracoes();
                 atualizarTela();
+                if (conflitantes.length) {
+                    mostrarMensagem(`Há ${conflitantes.length} dia(s) antigos divergentes no navegador. Baixe o backup local antes de substituí-los.`);
+                }
             } catch (erro) {
-                console.error("Falha ao carregar o ponto do servidor:", erro);
-                mostrarMensagem("Sem conexão com o backend. Inicie o Express na porta 3000.");
+                console.error("Falha ao carregar dados do SQLite:", erro);
+                mostrarMensagem("Não foi possível carregar os dados do servidor. Confira o backend na porta 3000.");
             } finally {
                 document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
             }
         }
+
+        
 
         function lerJSONLocal(chave, padrao) {
             try {
@@ -146,18 +190,32 @@ const STORAGE_PONTO = "meu_ponto_registros";
             document.getElementById("nomeFuncionario").value = configuracoes.nome || "";
         }
 
-        function salvarConfiguracoes() {
-            configuracoes.jornada = document.getElementById("jornadaDiaria").value || "08:00";
-            configuracoes.inicioSemana = document.getElementById("inicioSemana").value || "1";
-            configuracoes.nome = document.getElementById("nomeFuncionario").value.trim();
+        async function salvarConfiguracoes() {
+            if (!pontoServidorPronto) {
+                mostrarMensagem("Aguarde a conexão com o SQLite.");
+                return;
+            }
+            const novas = {
+                jornada: document.getElementById("jornadaDiaria").value || "08:00",
+                inicioSemana: document.getElementById("inicioSemana").value || "1",
+                nome: document.getElementById("nomeFuncionario").value.trim()
+            };
             try {
-                localStorage.setItem(STORAGE_CONFIG, JSON.stringify(configuracoes));
+                configuracoes = await requisitarAPI("/api/configuracoes", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(novas)
+                });
                 atualizarTela();
-                mostrarMensagem("Configurações salvas!");
+                mostrarMensagem("Configurações salvas no SQLite!");
             } catch (erro) {
-                mostrarMensagem("Não foi possível salvar neste navegador. Faça um backup dos dados.");
+                console.error("Falha ao salvar configurações:", erro);
+                carregarConfiguracoes();
+                mostrarMensagem("Erro ao salvar as configurações no SQLite.");
             }
         }
+
+        
 
         function criarRegistroSeNecessario(data = dataHoje()) {
             if (!registros[data]) {
@@ -197,35 +255,18 @@ async function baterPonto() {
             }
         }
 
-        async function salvarDados(data = null) {
+        async function salvarDados(data) {
+            if (!pontoServidorPronto || !data) {
+                mostrarMensagem("Aguarde o carregamento do servidor.");
+                return false;
+            }
             try {
-                if (data === dataHoje()) {
-                    if (!pontoServidorPronto) throw new Error("O registro de hoje não foi carregado.");
-                    if (registros[data]) {
-                        registros[data] = await salvarRegistroNoServidor(data, registros[data]);
-                    } else {
-                        await requisitarRegistro(data, { method: "DELETE" });
-                        // Exclusão do dia confirmada pelo usuário.
-                        const locais = carregarRegistros();
-                        if (Object.hasOwn(locais, data)) {
-                            delete locais[data];
-                            localStorage.setItem(STORAGE_PONTO, JSON.stringify(locais));
-                        }
-                    }
-                    return true;
-                }
-
-                // Mantém a versão antiga do dia no armazenamento local, sem substituí-la.
-                const locais = carregarRegistros();
-                const paraSalvar = { ...registros };
-                const hoje = dataHoje();
-                if (Object.hasOwn(locais, hoje)) paraSalvar[hoje] = locais[hoje];
-                else delete paraSalvar[hoje];
-                localStorage.setItem(STORAGE_PONTO, JSON.stringify(paraSalvar));
+                if (registros[data]) registros[data] = await salvarRegistroNoServidor(data, registros[data]);
+                else await requisitarRegistro(data, { method: "DELETE" });
                 return true;
             } catch (erro) {
-                console.error("Falha ao salvar registros:", erro);
-                mostrarMensagem("Não foi possível salvar. Confira a conexão com o servidor.");
+                console.error("Falha ao salvar registros no SQLite:", erro);
+                mostrarMensagem("Erro ao salvar no SQLite. Verifique a conexão.");
                 return false;
             }
         }
@@ -630,39 +671,38 @@ async function baterPonto() {
             const arquivo = evento.target.files && evento.target.files[0];
             if (!arquivo) return;
             try {
+                if (!pontoServidorPronto) throw new Error("Servidor indisponível.");
                 const conteudo = JSON.parse(await arquivo.text());
-                const registrosImportados = normalizarRegistros(conteudo.registros || conteudo);
-                if (!Object.keys(registrosImportados).length) throw new Error("O arquivo não contém registros válidos.");
-                if (!window.confirm("Restaurar este backup substituirá os registros atuais neste navegador. Deseja continuar?")) return;
-                // Restaurar histórico sem substituir o ponto atual do SQLite.
-                const hoje = dataHoje();
-                if (registrosImportados[hoje] && !window.confirm(
-                    "O backup contém batidas de hoje. Deseja restaurar apenas os dias anteriores, " +
-                    "sem alterar o ponto atual que está no SQLite?"
-                )) return;
-                const registroServidorHoje = registros[hoje];
-                registros = registrosImportados;
-                if (registroServidorHoje) registros[hoje] = registroServidorHoje;
-                else delete registros[hoje];
-                if (conteudo.configuracoes && typeof conteudo.configuracoes === "object") {
-                    configuracoes = {
-                        jornada: horarioValido(conteudo.configuracoes.jornada) ? conteudo.configuracoes.jornada : "08:00",
-                        inicioSemana: String(conteudo.configuracoes.inicioSemana ?? "1"),
-                        nome: typeof conteudo.configuracoes.nome === "string" ? conteudo.configuracoes.nome : ""
-                    };
-                    localStorage.setItem(STORAGE_CONFIG, JSON.stringify(configuracoes));
-                    carregarConfiguracoes();
+                if (!conteudo || typeof conteudo !== "object" || !conteudo.registros ||
+                    typeof conteudo.registros !== "object" || Array.isArray(conteudo.registros)) {
+                    throw new Error("Backup precisa conter a propriedade registros.");
                 }
-                if (!(await salvarDados())) throw new Error("Falha ao restaurar o histórico local.");
-                atualizarTela();
-                mostrarMensagem("Histórico local restaurado. Ponto atual preservado no SQLite.");
+                if (!window.confirm(
+                    "Restaurar este backup substituirá TODOS os registros do SQLite" +
+                    " e as configurações presentes no arquivo. Baixe primeiro um backup atual. Continuar?"
+                )) return;
+
+                await requisitarAPI("/api/backup", {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        registros: conteudo.registros,
+                        ...(conteudo.configuracoes ? { configuracoes: conteudo.configuracoes } : {})
+                    })
+                });
+                // Não oferecer migração local logo após substituir o banco intencionalmente.
+                localStorage.setItem("meu_ponto_backup_restaurado", "1");
+                await carregarDadosIniciais({ oferecerMigracao: false });
+                mostrarMensagem("Backup restaurado no SQLite.");
             } catch (erro) {
-                console.error(erro);
-                mostrarMensagem("Não foi possível importar. Selecione um backup JSON válido.");
+                console.error("Falha ao restaurar o backup:", erro);
+                mostrarMensagem("Não foi possível restaurar o backup. Confira o arquivo e o servidor.");
             } finally {
                 evento.target.value = "";
             }
         }
+
+        
 
         function mostrarMensagem(texto) {
             const elemento = document.getElementById("mensagem");
