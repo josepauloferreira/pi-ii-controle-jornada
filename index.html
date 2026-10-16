@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Meu Ponto - Home Office</title>
+
+    <link rel="stylesheet" href="/src/style.css">
+</head>
+
+<body>
+
+    <header>
+        <div class="container">
+            <h1>Meu Ponto</h1>
+            <p>Controle de jornada - Home Office</p>
+        </div>
+    </header>
+
+    <div class="container">
+
+        <div style="margin-bottom:20px;padding:12px 16px;border-left:4px solid #2563eb;background:#eff6ff;border-radius:8px;color:#1e3a8a">Este sistema funciona offline e salva os registros neste navegador. Use <strong>Fazer backup</strong> para guardar uma cópia dos dados.</div>
+
+        <!-- TOPO -->
+        <div class="topo">
+
+            <div>
+                <div class="relogio" id="relogio">
+                    00:00:00
+                </div>
+
+                <div class="data-atual" id="dataAtual">
+                    --
+                </div>
+            </div>
+
+        </div>
+
+
+        <!-- BATER PONTO -->
+        <div class="card">
+
+            <h2>Ponto de hoje</h2>
+
+            <div class="bater-ponto">
+
+                <button class="btn-ponto" id="btnBaterPonto" onclick="baterPonto()">
+                    BATER PONTO
+                </button>
+
+            </div>
+
+            <div class="batidas-hoje">
+
+                <div class="batida">
+                    <strong>Entrada</strong>
+                    <div class="horario" id="entrada">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarEntrada" type="button" onclick="editarBatidaHoje('entrada')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarEntrada" type="button" onclick="excluirBatidaHoje('entrada')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+                <div class="batida">
+                    <strong>Saída almoço</strong>
+                    <div class="horario" id="saidaAlmoco">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarSaidaAlmoco" type="button" onclick="editarBatidaHoje('saidaAlmoco')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarSaidaAlmoco" type="button" onclick="excluirBatidaHoje('saidaAlmoco')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+                <div class="batida">
+                    <strong>Retorno almoço</strong>
+                    <div class="horario" id="retornoAlmoco">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarRetornoAlmoco" type="button" onclick="editarBatidaHoje('retornoAlmoco')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarRetornoAlmoco" type="button" onclick="excluirBatidaHoje('retornoAlmoco')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+                <div class="batida">
+                    <strong>Saída</strong>
+                    <div class="horario" id="saida">--:--</div>
+                    <div class="batida-acoes">
+                        <button class="btn btn-azul btn-apagar-batida" id="editarSaida" type="button" onclick="editarBatidaHoje('saida')" hidden>Editar</button>
+                        <button class="btn btn-vermelho btn-apagar-batida" id="apagarSaida" type="button" onclick="excluirBatidaHoje('saida')" hidden>Excluir</button>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="extra">
+
+                <strong>Batidas extras</strong>
+
+                <div id="extrasHoje">
+                    <p class="sem-registro">
+                        Nenhuma batida extra.
+                    </p>
+                </div>
+
+                <br>
+
+                <button class="btn btn-secundario" onclick="abrirModalExtra()">
+                    + Adicionar batida extra
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- RESUMO DO DIA -->
+        <div class="card">
+
+            <h2>Resumo de hoje</h2>
+
+            <div class="resumo">
+
+                <div class="resumo-item">
+                    <span>Horas trabalhadas</span>
+                    <strong id="horasHoje">00:00</strong>
+                </div>
+
+                <div class="resumo-item">
+                    <span>Jornada prevista</span>
+                    <strong id="jornadaHoje">08:00</strong>
+                </div>
+
+                <div class="resumo-item">
+                    <span>Saldo do dia</span>
+                    <strong id="saldoHoje">00:00</strong>
+                </div>
+
+                <div class="resumo-item">
+                    <span>Batidas</span>
+                    <strong id="quantidadeBatidas">0</strong>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- CONFIGURAÇÕES -->
+        <div class="card">
+
+            <h2>Configuração da jornada</h2>
+
+            <div class="configuracao">
+
+                <div>
+                    <label>Horas por dia</label>
+
+                    <input type="time" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()">
+                </div>
+
+                <div>
+                    <label>Início da semana</label>
+
+                    <select id="inicioSemana" onchange="salvarConfiguracoes()">
+                        <option value="1">Segunda-feira</option>
+                        <option value="0">Domingo</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label>Nome do funcionário</label>
+
+                    <input type="text" id="nomeFuncionario" placeholder="Seu nome" onchange="salvarConfiguracoes()">
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- HISTÓRICO -->
+        <div class="card">
+
+            <h2>Histórico</h2>
+
+            <div class="filtros">
+
+                <div class="filtro-item">
+
+                    <label>Mês</label>
+
+                    <input type="month" id="mesFiltro" onchange="renderizarHistorico()">
+
+                </div>
+
+                <button class="btn btn-azul" onclick="exportarCSV()">
+                    Exportar CSV
+                </button>
+
+                <button class="btn btn-verde" onclick="exportarJSON()">
+                    Fazer backup
+                </button>
+
+                <button class="btn btn-secundario" onclick="document.getElementById('arquivoJSON').click()">
+                    Restaurar backup
+                </button>
+
+                <input type="file" id="arquivoJSON" accept=".json" style="display:none" onchange="importarJSON(event)">
+
+            </div>
+
+            <br>
+
+            <div class="tabela-container">
+
+                <table>
+
+                    <thead>
+
+                        <tr>
+                            <th>Data</th>
+                            <th>Entrada</th>
+                            <th>Saída almoço</th>
+                            <th>Retorno</th>
+                            <th>Saída</th>
+                            <th>Extras</th>
+                            <th>Horas trabalhadas</th>
+                            <th>Saldo</th>
+                            <th>Ações</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody id="tabelaHistorico">
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- MODAL BATIDA EXTRA -->
+
+    <div class="modal" id="modalExtra">
+
+        <div class="modal-content">
+
+            <h2 id="tituloModalExtra">Gerenciar batidas extras</h2>
+
+            <p id="dataModalExtra" class="sem-registro" style="margin-bottom: 12px"></p>
+
+            <input type="hidden" id="dataExtra">
+            <input type="hidden" id="indiceExtra" value="">
+
+            <div id="listaExtrasModal" style="margin-bottom: 18px"></div>
+
+            <div class="campo">
+
+                <label>Horário</label>
+
+                <input type="time" id="horarioExtra">
+
+            </div>
+
+            <div class="campo">
+
+                <label>Descrição</label>
+
+                <input type="text" id="descricaoExtra" placeholder="Ex.: Retorno de atividade">
+
+            </div>
+
+            <div class="modal-acoes">
+
+                <button class="btn btn-secundario" onclick="fecharModalExtra()">
+                    Cancelar
+                </button>
+
+                <button class="btn btn-azul" onclick="salvarBatidaExtra()">
+                    <span id="textoBotaoExtra">Adicionar batida</span>
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- MODAL EDIÇÃO -->
+
+    <div class="modal" id="modalEdicao">
+
+        <div class="modal-content">
+
+            <h2>Editar registro</h2>
+
+            <input type="hidden" id="dataEdicao">
+
+            <div class="campo">
+
+                <label>Entrada</label>
+
+                <input type="time" id="editEntrada">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('entrada')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="campo">
+
+                <label>Saída almoço</label>
+
+                <input type="time" id="editSaidaAlmoco">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saidaAlmoco')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="campo">
+
+                <label>Retorno almoço</label>
+
+                <input type="time" id="editRetorno">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('retornoAlmoco')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="campo">
+
+                <label>Saída</label>
+
+                <input type="time" id="editSaida">
+                <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saida')">Excluir esta batida</button>
+
+            </div>
+
+            <div class="modal-acoes">
+
+                <button class="btn btn-secundario" onclick="fecharModalEdicao()">
+                    Cancelar
+                </button>
+
+                <button class="btn btn-azul" onclick="salvarEdicao()">
+                    Salvar alterações
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="mensagem" id="mensagem">
+        Registro salvo!
+    </div>
+
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

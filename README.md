@@ -10,12 +10,13 @@ Aplicação web para registrar e acompanhar a jornada de trabalho em home office
 - [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
 - [ ] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
 - [ ] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
+- [ ] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
 
 As etapas 1 e 2 podem ser desenvolvidas em paralelo. A etapa 3 depende das duas primeiras, e a etapa 4 depende da terceira.
 
 **Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
 
-**Pendente:** integrar o frontend organizado com Vite e habilitar a restauração de backups JSON na demonstração.
+**Pendente:** conectar o frontend Vite à API (#15 e #16), habilitar a restauração de backups na demonstração e refinar a aparência (#18).
 
 
 ## O que o sistema faz
@@ -30,18 +31,28 @@ O saldo só aparece depois que a jornada é concluída. Antes disso, mostra **"E
 
 ## Tecnologias
 
-- **Interface:** HTML, CSS e JavaScript. A organização com Vite ainda é uma tarefa do grupo.
+- **Interface:** HTML, CSS e JavaScript com Vite (a integração à API ainda será realizada).
 - **Servidor:** Node.js + Express.
 - **Banco de dados:** SQLite.
 
-## Como executar no GitHub Codespaces
+## Como executar o frontend com Vite
 
-1. Abra o repositório no Codespaces.
-2. No terminal, entre na branch do backend e inicie o servidor:
+No Codespaces, abra um terminal **na raiz do repositório**:
 
 ```bash
-git switch main
-git pull
+npm install
+npm run dev
+```
+
+Abra a porta **5173** na aba **Ports (Portas)**, mantendo a visibilidade como **Private**.
+
+A versão Vite ainda salva registros no `localStorage`, como o HTML original; ela **não utiliza o SQLite nesta etapa**. Como a porta 5173 pode ter uma origem diferente do HTML usado anteriormente, registros antigos podem não aparecer automaticamente. Exporte um backup JSON no navegador antigo e restaure-o na versão Vite, se necessário.
+
+## Como executar o backend com SQLite
+
+No Codespaces, em outro terminal, partindo da raiz do repositório:
+
+```bash
 cd backend
 npm install
 npm start
@@ -54,10 +65,13 @@ A página aberta é a **demonstração do sistema conectada ao SQLite**. Não é
 
 Para parar o servidor, pressione `Ctrl+C` no terminal.
 
-**Requisito:** Node.js 22 ou superior.
+**Requisito:** Node.js 22.12 ou superior para usar o Vite e o backend.
 
 ## Arquivos principais
 
+- `index.html`: página principal do frontend Vite.
+- `src/style.css`: estilos da interface.
+- `src/main.js`: funcionalidades do frontend.
 - `Projeto-PI-Ponto.html`: versão inicial, que salva os dados no navegador.
 - `backend/demo.html`: demonstração da interface conectada ao banco de dados.
 - `backend/server.js`: servidor Express e endereços da API.
