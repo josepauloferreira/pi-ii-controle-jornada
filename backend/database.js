@@ -27,4 +27,19 @@ db.exec(`
   INSERT OR IGNORE INTO configuracoes (id) VALUES (1);
 `);
 
+// As tabelas de ponto existentes permanecem inalteradas.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS conta (
+    id INTEGER PRIMARY KEY CHECK(id = 1),
+    usuario TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    senha_hash TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS sessoes_conta (
+    token_hash TEXT PRIMARY KEY,
+    csrf_token TEXT NOT NULL,
+    expira_em INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS sessoes_conta_expiracao ON sessoes_conta(expira_em);
+`);
+
 module.exports = db;
