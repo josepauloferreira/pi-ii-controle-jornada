@@ -380,85 +380,103 @@ async function baterPonto() {
         function renderizarExtrasHoje(extras) {
             const lista = document.getElementById("extrasHoje");
             lista.replaceChildren();
+
             if (!extras.length) {
                 const vazio = document.createElement("p");
                 vazio.className = "sem-registro";
-                vazio.textContent = "Nenhuma batida extra.";
+                vazio.textContent = "Nenhuma batida extra registrada.";
                 lista.appendChild(vazio);
                 return;
             }
-            extras.forEach((item, indice) => {
-                const linha = document.createElement("div");
-                linha.className = "extra-item";
-                const descricao = document.createElement("span");
-                descricao.textContent = `${item.horario} — ${item.descricao || "Batida extra"}`;
-                const acoes = document.createElement("div");
-                acoes.className = "extra-acoes";
-                const editar = document.createElement("button");
-                editar.type = "button";
-                editar.className = "btn btn-azul";
-                editar.textContent = "Editar";
-                editar.addEventListener("click", () => abrirModalExtra(dataHoje(), indice));
-                const excluir = document.createElement("button");
-                excluir.type = "button";
-                excluir.className = "btn btn-vermelho";
-                excluir.textContent = "Excluir";
-                excluir.addEventListener("click", () => excluirBatidaExtra(dataHoje(), indice));
-                linha.appendChild(descricao);
-                acoes.append(editar, excluir);
-                linha.appendChild(acoes);
-                lista.appendChild(linha);
-            });
+
+            const resumo = document.createElement("div");
+            resumo.className = "extras-resumo";
+            const texto = document.createElement("span");
+            texto.textContent = `${extras.length} ${extras.length === 1 ? "batida extra registrada" : "batidas extras registradas"}`;
+            const detalhes = document.createElement("button");
+            detalhes.type = "button";
+            detalhes.className = "btn btn-secundario";
+            detalhes.textContent = "Ver detalhes";
+            detalhes.addEventListener("click", () => abrirModalExtra(dataHoje()));
+            resumo.append(texto, detalhes);
+            lista.appendChild(resumo);
         }
 
         function renderizarHistorico() {
             const corpo = document.getElementById("tabelaHistorico");
             if (!corpo) return;
             corpo.replaceChildren();
+
             const mes = document.getElementById("mesFiltro").value;
-            const datas = Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort((a, b) => b.localeCompare(a));
+            const datas = Object.keys(registros)
+                .filter(data => !mes || data.startsWith(mes))
+                .sort((a, b) => b.localeCompare(a));
+
             if (!datas.length) {
                 const linha = document.createElement("tr");
                 const celula = document.createElement("td");
                 celula.colSpan = 9;
-                celula.className = "sem-registro";
+                celula.className = "tabela-vazio";
                 celula.textContent = "Nenhum registro neste mês.";
                 linha.appendChild(celula);
                 corpo.appendChild(linha);
                 return;
             }
+
+            const colunas = ["Data", "Entrada", "Saída almoço", "Retorno", "Saída", "Extras", "Trabalhadas", "Saldo"];
             for (const data of datas) {
                 const registro = registros[data];
                 const linha = document.createElement("tr");
-                const extras = (registro.extras || []).map(item => `${item.horario} (${item.descricao || "Batida extra"})`).join("; ") || "—";
                 const trabalhado = minutosTrabalhados(registro);
                 const jornada = minutosDeHorario(configuracoes.jornada) || 480;
                 const saldo = saldoCalculado(registro, jornada);
-                const valores = [formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—", registro.retornoAlmoco || "—", registro.saida || "—", extras, formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)];
+                const valores = [
+                    formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—",
+                    registro.retornoAlmoco || "—", registro.saida || "—", null,
+                    formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)
+                ];
+
                 valores.forEach((valor, indice) => {
                     const celula = document.createElement("td");
-                    celula.textContent = valor;
-                    if (indice === 7 && saldo !== null && saldo !== 0) celula.className = saldo > 0 ? "saldo-positivo" : "saldo-negativo";
+                    celula.dataset.label = colunas[indice];
+
+                    if (indice === 5) {
+                        const quantidade = (registro.extras || []).length;
+                        const botao = document.createElement("button");
+                        botao.type = "button";
+                        botao.className = "extras-count";
+                        botao.textContent = `${quantidade} ${quantidade === 1 ? "extra" : "extras"}`;
+                        botao.setAttribute("aria-label", `Gerenciar batidas extras de ${formatarData(data)} (${quantidade})`);
+                        botao.addEventListener("click", () => abrirModalExtra(data));
+                        celula.appendChild(botao);
+                    } else {
+                        celula.textContent = valor;
+                    }
+
+                    if (indice === 7 && saldo !== null && saldo !== 0) {
+                        celula.classList.add(saldo > 0 ? "saldo-positivo" : "saldo-negativo");
+                    }
                     linha.appendChild(celula);
                 });
+
                 const acoes = document.createElement("td");
+                acoes.dataset.label = "Ações";
+                const grupo = document.createElement("div");
+                grupo.className = "table-actions";
                 const editar = document.createElement("button");
-                editar.className = "btn btn-azul";
+                editar.type = "button";
+                editar.className = "btn btn-secundario";
                 editar.textContent = "Editar";
+                editar.setAttribute("aria-label", `Editar registro de ${formatarData(data)}`);
                 editar.addEventListener("click", () => abrirEdicao(data));
                 const excluir = document.createElement("button");
                 excluir.type = "button";
                 excluir.className = "btn btn-vermelho";
-                excluir.textContent = "Excluir dia";
-                excluir.style.marginLeft = "6px";
+                excluir.textContent = "Excluir";
+                excluir.setAttribute("aria-label", `Excluir registro de ${formatarData(data)}`);
                 excluir.addEventListener("click", () => excluirRegistro(data));
-                const gerenciarExtras = document.createElement("button");
-                gerenciarExtras.type = "button";
-                gerenciarExtras.className = "btn btn-secundario";
-                gerenciarExtras.textContent = `Extras (${(registro.extras || []).length})`;
-                gerenciarExtras.style.marginLeft = "6px";
-                gerenciarExtras.addEventListener("click", () => abrirModalExtra(data));
-                acoes.append(editar, excluir, gerenciarExtras);
+                grupo.append(editar, excluir);
+                acoes.appendChild(grupo);
                 linha.appendChild(acoes);
                 corpo.appendChild(linha);
             }
