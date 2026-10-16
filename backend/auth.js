@@ -127,7 +127,8 @@ function configureAuth(app, db) {
       return res.status(429).json({ erro: "Muitas tentativas. Tente novamente em 15 minutos." });
     }
     const account = getAccount.get();
-    if (!account || account.usuario !== username || !checkHash(password, account.senha_hash)) {
+    const passwordMatches = checkHash(password, account?.senha_hash || dummyHash);
+    if (!account || account.usuario !== username || !passwordMatches) {
       const item = attempt && attempt.expires > now ? attempt : { count: 0, expires: now + ATTEMPT_WINDOW };
       item.count++;
       attempts.set(key, item);
