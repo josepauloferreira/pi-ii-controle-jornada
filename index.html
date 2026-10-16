@@ -19,9 +19,9 @@
         </div>
     </header>
 
-    <div class="container">
+    <main class="container">
 
-        <div style="margin-bottom:20px;padding:12px 16px;border-left:4px solid #2563eb;background:#eff6ff;border-radius:8px;color:#1e3a8a">Os <strong>registros e configurações</strong> agora são salvos no SQLite. Cópias antigas no navegador são preservadas e podem ser exportadas separadamente. <button type="button" id="btnBackupLocal" class="btn btn-secundario" style="margin-top:8px;display:none">Baixar backup dos dados antigos do navegador</button></div>
+        <div class="aviso-dados">Os <strong>registros e configurações</strong> agora são salvos no SQLite. Cópias antigas no navegador são preservadas e podem ser exportadas separadamente. <button type="button" id="btnBackupLocal" class="btn btn-secundario" style="margin-top:8px;display:none">Baixar backup dos dados antigos do navegador</button></div>
 
         <!-- TOPO -->
         <div class="topo">
@@ -153,13 +153,13 @@
             <div class="configuracao">
 
                 <div>
-                    <label>Horas por dia</label>
+                    <label for="jornadaDiaria">Horas por dia</label>
 
                     <input type="time" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()">
                 </div>
 
                 <div>
-                    <label>Início da semana</label>
+                    <label for="inicioSemana">Início da semana</label>
 
                     <select id="inicioSemana" onchange="salvarConfiguracoes()">
                         <option value="1">Segunda-feira</option>
@@ -168,7 +168,7 @@
                 </div>
 
                 <div>
-                    <label>Nome do funcionário</label>
+                    <label for="nomeFuncionario">Nome do funcionário</label>
 
                     <input type="text" id="nomeFuncionario" placeholder="Seu nome" onchange="salvarConfiguracoes()">
                 </div>
@@ -187,7 +187,7 @@
 
                 <div class="filtro-item">
 
-                    <label>Mês</label>
+                    <label for="mesFiltro">Mês</label>
 
                     <input type="month" id="mesFiltro" onchange="renderizarHistorico()">
 
@@ -241,7 +241,7 @@
 
         </div>
 
-    </div>
+    </main>
 
 
     <!-- MODAL BATIDA EXTRA -->
@@ -261,7 +261,7 @@
 
             <div class="campo">
 
-                <label>Horário</label>
+                <label for="horarioExtra">Horário</label>
 
                 <input type="time" id="horarioExtra">
 
@@ -269,7 +269,7 @@
 
             <div class="campo">
 
-                <label>Descrição</label>
+                <label for="descricaoExtra">Descrição</label>
 
                 <input type="text" id="descricaoExtra" placeholder="Ex.: Retorno de atividade">
 
@@ -304,7 +304,7 @@
 
             <div class="campo">
 
-                <label>Entrada</label>
+                <label for="editEntrada">Entrada</label>
 
                 <input type="time" id="editEntrada">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('entrada')">Excluir esta batida</button>
@@ -313,7 +313,7 @@
 
             <div class="campo">
 
-                <label>Saída almoço</label>
+                <label for="editSaidaAlmoco">Saída almoço</label>
 
                 <input type="time" id="editSaidaAlmoco">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saidaAlmoco')">Excluir esta batida</button>
@@ -322,7 +322,7 @@
 
             <div class="campo">
 
-                <label>Retorno almoço</label>
+                <label for="editRetorno">Retorno almoço</label>
 
                 <input type="time" id="editRetorno">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('retornoAlmoco')">Excluir esta batida</button>
@@ -331,7 +331,7 @@
 
             <div class="campo">
 
-                <label>Saída</label>
+                <label for="editSaida">Saída</label>
 
                 <input type="time" id="editSaida">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saida')">Excluir esta batida</button>
@@ -355,7 +355,7 @@
     </div>
 
 
-    <div class="mensagem" id="mensagem">
+    <div class="mensagem" id="mensagem" role="status" aria-live="polite">
         Registro salvo!
     </div>
 
