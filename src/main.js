@@ -4,6 +4,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
         let registros = carregarRegistros();
         let configuracoes = carregarConfiguracoesLocais();
         let mensagemTimer = null;
+        let pontoServidorPronto = false;
+        let registrandoPonto = false;
 
         document.addEventListener("DOMContentLoaded", () => {
             carregarConfiguracoes();
@@ -11,7 +13,59 @@ const STORAGE_PONTO = "meu_ponto_registros";
             atualizarRelogio();
             window.setInterval(atualizarRelogio, 1000);
             atualizarTela();
+            document.getElementById("btnBaterPonto").disabled = true;
+            void carregarPontoHoje();
         });
+
+// Hoje utiliza o SQLite; os dias anteriores ainda são locais (issue #16).
+        async function requisitarRegistro(data, opcoes = {}) {
+            const resposta = await fetch(`/api/registros/${data}`, opcoes);
+            if (resposta.status === 404 && !opcoes.method) return null;
+            if (!resposta.ok) {
+                const corpo = await resposta.json().catch(() => ({}));
+                throw new Error(corpo.erro || "Falha na comunicação com o servidor.");
+            }
+            return resposta.status === 204 ? null : resposta.json();
+        }
+
+        async function salvarRegistroNoServidor(data, registro) {
+            return requisitarRegistro(data, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(registro)
+            });
+        }
+
+        async function carregarPontoHoje() {
+            const hoje = dataHoje();
+            try {
+                const remoto = await requisitarRegistro(hoje);
+                if (remoto) {
+                    if (registros[hoje] && JSON.stringify(registros[hoje]) !== JSON.stringify(remoto)) {
+                        mostrarMensagem("Ponto carregado do SQLite. O registro local anterior foi preservado no navegador.");
+                    }
+                    registros[hoje] = remoto;
+                } else if (registros[hoje]) {
+                    if (!window.confirm(
+                        "Há batidas de hoje salvas apenas neste navegador. Deseja copiá-las para o SQLite? " +
+                        "Clique em Cancelar se preferir fazer um backup JSON antes."
+                    )) {
+                        mostrarMensagem("Ponto não conectado. Faça um backup e atualize a página para migrar.");
+                        return;
+                    }
+                    registros[hoje] = await salvarRegistroNoServidor(hoje, registros[hoje]);
+                } else {
+                    delete registros[hoje];
+                }
+                pontoServidorPronto = true;
+                atualizarTela();
+            } catch (erro) {
+                console.error("Falha ao carregar o ponto do servidor:", erro);
+                mostrarMensagem("Sem conexão com o backend. Inicie o Express na porta 3000.");
+            } finally {
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
+            }
+        }
 
         function lerJSONLocal(chave, padrao) {
             try {
@@ -113,31 +167,70 @@ const STORAGE_PONTO = "meu_ponto_registros";
             return registros[data];
         }
 
-        function baterPonto() {
+async function baterPonto() {
+            if (!pontoServidorPronto || registrandoPonto) {
+                mostrarMensagem("Aguarde a conexão com o servidor para bater ponto.");
+                return;
+            }
+
             const data = dataHoje();
-            const registro = criarRegistroSeNecessario(data);
+            const registro = registros[data]
+                ? structuredClone(registros[data])
+                : { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
             const horario = new Date().toTimeString().slice(0, 5);
             const proximoCampo = CAMPOS_PONTO.find(campo => !registro[campo]);
-            if (proximoCampo) {
-                registro[proximoCampo] = horario;
-            } else {
-                registro.extras.push({ horario, descricao: "Batida extra" });
+            if (proximoCampo) registro[proximoCampo] = horario;
+            else registro.extras.push({ horario, descricao: "Batida extra" });
+
+            registrandoPonto = true;
+            document.getElementById("btnBaterPonto").disabled = true;
+            try {
+                registros[data] = await salvarRegistroNoServidor(data, registro);
+                atualizarTela();
+                mostrarMensagem(`Ponto registrado às ${horario} no SQLite.`);
+            } catch (erro) {
+                console.error("Não foi possível registrar o ponto:", erro);
+                mostrarMensagem("Falha ao salvar o ponto no SQLite. Tente novamente.");
+            } finally {
+                registrandoPonto = false;
+                document.getElementById("btnBaterPonto").disabled = false;
             }
-            salvarDados();
-            atualizarTela();
-            mostrarMensagem(`Ponto registrado às ${horario}`);
         }
 
-        function salvarDados() {
+        async function salvarDados(data = null) {
             try {
-                localStorage.setItem(STORAGE_PONTO, JSON.stringify(registros));
+                if (data === dataHoje()) {
+                    if (!pontoServidorPronto) throw new Error("O registro de hoje não foi carregado.");
+                    if (registros[data]) {
+                        registros[data] = await salvarRegistroNoServidor(data, registros[data]);
+                    } else {
+                        await requisitarRegistro(data, { method: "DELETE" });
+                        // Exclusão do dia confirmada pelo usuário.
+                        const locais = carregarRegistros();
+                        if (Object.hasOwn(locais, data)) {
+                            delete locais[data];
+                            localStorage.setItem(STORAGE_PONTO, JSON.stringify(locais));
+                        }
+                    }
+                    return true;
+                }
+
+                // Mantém a versão antiga do dia no armazenamento local, sem substituí-la.
+                const locais = carregarRegistros();
+                const paraSalvar = { ...registros };
+                const hoje = dataHoje();
+                if (Object.hasOwn(locais, hoje)) paraSalvar[hoje] = locais[hoje];
+                else delete paraSalvar[hoje];
+                localStorage.setItem(STORAGE_PONTO, JSON.stringify(paraSalvar));
                 return true;
             } catch (erro) {
-                console.error("Falha ao salvar os registros locais:", erro);
-                mostrarMensagem("Falha ao salvar. Exporte um backup e verifique o espaço do navegador.");
+                console.error("Falha ao salvar registros:", erro);
+                mostrarMensagem("Não foi possível salvar. Confira a conexão com o servidor.");
                 return false;
             }
         }
+
+        
 
         function minutosDeHorario(valor) {
             if (!horarioValido(valor)) return null;
@@ -320,7 +413,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             document.getElementById("modalEdicao").style.display = "none";
         }
 
-        function salvarEdicao() {
+        async function salvarEdicao() {
             const data = document.getElementById("dataEdicao").value;
             if (!registros[data]) return;
             const anterior = { ...registros[data] };
@@ -334,7 +427,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 registros[data][campo] = valor || null;
             }
             removerRegistroSeVazio(data);
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 registros[data] = anterior;
                 atualizarTela();
                 return;
@@ -352,11 +445,11 @@ const STORAGE_PONTO = "meu_ponto_registros";
             if (!temBatidaPrincipal && !temExtra) delete registros[data];
         }
 
-        function excluirRegistro(data) {
+        async function excluirRegistro(data) {
             if (!window.confirm(`Excluir o registro de ${formatarData(data)}? Essa ação não pode ser desfeita.`)) return;
             const anterior = registros[data];
             delete registros[data];
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 if (anterior) registros[data] = anterior;
                 atualizarTela();
                 return;
@@ -369,9 +462,9 @@ const STORAGE_PONTO = "meu_ponto_registros";
             excluirBatida(dataHoje(), campo);
         }
 
-        function excluirBatidaEmEdicao(campo) {
+        async function excluirBatidaEmEdicao(campo) {
             const data = document.getElementById("dataEdicao").value;
-            excluirBatida(data, campo);
+            if (!(await excluirBatida(data, campo))) return;
             if (registros[data]) {
                 const ids = { entrada: "editEntrada", saidaAlmoco: "editSaidaAlmoco", retornoAlmoco: "editRetorno", saida: "editSaida" };
                 document.getElementById(ids[campo]).value = registros[data][campo] || "";
@@ -380,7 +473,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             }
         }
 
-        function excluirBatida(data, campo) {
+        async function excluirBatida(data, campo) {
             const registro = registros[data];
             if (!registro || !CAMPOS_PONTO.includes(campo) || !registro[campo]) return;
             const nomes = { entrada: "Entrada", saidaAlmoco: "Saída do almoço", retornoAlmoco: "Retorno do almoço", saida: "Saída" };
@@ -388,7 +481,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             const horarioAnterior = registro[campo];
             registro[campo] = null;
             removerRegistroSeVazio(data);
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 if (!registros[data]) registros[data] = { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
                 registros[data][campo] = horarioAnterior;
                 atualizarTela();
@@ -396,6 +489,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             }
             atualizarTela();
             mostrarMensagem("Batida excluída.");
+            return true;
         }
 
         function renderizarListaExtrasModal(data) {
@@ -450,7 +544,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             document.getElementById("modalExtra").style.display = "none";
         }
 
-        function salvarBatidaExtra() {
+        async function salvarBatidaExtra() {
             const data = document.getElementById("dataExtra").value || dataHoje();
             const horario = document.getElementById("horarioExtra").value;
             if (!horarioValido(horario)) {
@@ -471,7 +565,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             } else {
                 registro.extras[indice] = { horario, descricao };
             }
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 if (anterior) registros[data] = anterior;
                 else delete registros[data];
                 atualizarTela();
@@ -482,7 +576,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             mostrarMensagem(indice === null ? "Batida extra adicionada." : "Batida extra atualizada.");
         }
 
-        function excluirBatidaExtra(data, indice) {
+        async function excluirBatidaExtra(data, indice) {
             const registro = registros[data];
             if (!registro || !registro.extras?.[indice]) return;
             const extraAnterior = registro.extras[indice];
@@ -490,7 +584,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             const copiaAnterior = { ...registro, extras: [...registro.extras] };
             registro.extras.splice(indice, 1);
             removerRegistroSeVazio(data);
-            if (!salvarDados()) {
+            if (!(await salvarDados(data))) {
                 registros[data] = copiaAnterior;
                 atualizarTela();
                 return;
@@ -540,7 +634,16 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 const registrosImportados = normalizarRegistros(conteudo.registros || conteudo);
                 if (!Object.keys(registrosImportados).length) throw new Error("O arquivo não contém registros válidos.");
                 if (!window.confirm("Restaurar este backup substituirá os registros atuais neste navegador. Deseja continuar?")) return;
+                // Restaurar histórico sem substituir o ponto atual do SQLite.
+                const hoje = dataHoje();
+                if (registrosImportados[hoje] && !window.confirm(
+                    "O backup contém batidas de hoje. Deseja restaurar apenas os dias anteriores, " +
+                    "sem alterar o ponto atual que está no SQLite?"
+                )) return;
+                const registroServidorHoje = registros[hoje];
                 registros = registrosImportados;
+                if (registroServidorHoje) registros[hoje] = registroServidorHoje;
+                else delete registros[hoje];
                 if (conteudo.configuracoes && typeof conteudo.configuracoes === "object") {
                     configuracoes = {
                         jornada: horarioValido(conteudo.configuracoes.jornada) ? conteudo.configuracoes.jornada : "08:00",
@@ -550,9 +653,9 @@ const STORAGE_PONTO = "meu_ponto_registros";
                     localStorage.setItem(STORAGE_CONFIG, JSON.stringify(configuracoes));
                     carregarConfiguracoes();
                 }
-                salvarDados();
+                if (!(await salvarDados())) throw new Error("Falha ao restaurar o histórico local.");
                 atualizarTela();
-                mostrarMensagem("Backup restaurado.");
+                mostrarMensagem("Histórico local restaurado. Ponto atual preservado no SQLite.");
             } catch (erro) {
                 console.error(erro);
                 mostrarMensagem("Não foi possível importar. Selecione um backup JSON válido.");

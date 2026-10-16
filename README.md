@@ -6,7 +6,7 @@ Aplicação web para registrar e acompanhar a jornada de trabalho em home office
 
 ## Roadmap
 
-- [ ] [1. Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
+- [x] [1. Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
 - [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
 - [ ] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
 - [ ] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
@@ -16,7 +16,7 @@ As etapas 1 e 2 podem ser desenvolvidas em paralelo. A etapa 3 depende das duas 
 
 **Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
 
-**Pendente:** conectar o frontend Vite à API (#15 e #16), habilitar a restauração de backups na demonstração e refinar a aparência (#18).
+**Em andamento:** a issue #15 conecta as batidas do dia atual à API. A #16 integrará o histórico, as configurações e os backups; a #18 cuidará do visual.
 
 
 ## O que o sistema faz
@@ -31,7 +31,7 @@ O saldo só aparece depois que a jornada é concluída. Antes disso, mostra **"E
 
 ## Tecnologias
 
-- **Interface:** HTML, CSS e JavaScript com Vite (a integração à API ainda será realizada).
+- **Interface:** HTML, CSS e JavaScript com Vite (integração do ponto de hoje em andamento).
 - **Servidor:** Node.js + Express.
 - **Banco de dados:** SQLite.
 
@@ -46,7 +46,11 @@ npm run dev
 
 Abra a porta **5173** na aba **Ports (Portas)**, mantendo a visibilidade como **Private**.
 
-A versão Vite ainda salva registros no `localStorage`, como o HTML original; ela **não utiliza o SQLite nesta etapa**. Como a porta 5173 pode ter uma origem diferente do HTML usado anteriormente, registros antigos podem não aparecer automaticamente. Exporte um backup JSON no navegador antigo e restaure-o na versão Vite, se necessário.
+**Para bater ponto, também é necessário iniciar o backend Express na porta 3000** (veja abaixo). O Vite encaminha automaticamente chamadas `/api` para o Express, sem necessidade de publicar a porta 3000.
+
+Nesta etapa, o **dia atual** é carregado e salvo no SQLite. Os **dias anteriores e as configurações** ainda ficam em `localStorage` até a issue #16. O histórico local existente não é apagado automaticamente. Se houver batidas de hoje somente no navegador e nenhuma no banco, a aplicação pede confirmação para copiá-las ao SQLite. Você pode cancelar, baixar um backup JSON e atualizar a página para decidir depois.
+
+Atenção: dados locais de origens diferentes (portas diferentes) não são compartilhados automaticamente; o backup JSON ajuda na transferência, mas a restauração pela interface ainda não envia dias anteriores ao SQLite.
 
 ## Como executar o backend com SQLite
 
@@ -58,10 +62,9 @@ npm install
 npm start
 ```
 
-3. Abra a aba **Ports (Portas)** do Codespaces e localize a porta **3000**.
-4. Deixe a porta como **Private** e clique em **Open in Browser**.
+Na aba **Ports**, mantenha a porta **3000** como **Private**. A interface Vite continua acessível pela porta **5173**.
 
-A página aberta é a **demonstração do sistema conectada ao SQLite**. Não é preciso iniciar outro servidor para ver essa demonstração.
+A porta 3000 também abre a demonstração antiga em `backend/demo.html`, mas use a porta 5173 para testar o frontend Vite integrado.
 
 Para parar o servidor, pressione `Ctrl+C` no terminal.
 
