@@ -5,7 +5,7 @@ const Database = require("better-sqlite3");
 const pastaDados = path.join(__dirname, "dados");
 fs.mkdirSync(pastaDados, { recursive: true });
 
-const db = new Database(path.join(pastaDados, "jornada.db"));
+const db = new Database(process.env.MEU_PONTO_DB_PATH || path.join(pastaDados, "jornada.db"));
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS registros (
