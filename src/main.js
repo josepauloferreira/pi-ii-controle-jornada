@@ -62,12 +62,13 @@ const STORAGE_PONTO = "meu_ponto_registros";
             document.getElementById("btnBaterPonto").disabled = true;
 
             try {
-                const [dadosServidor, configServidor] = await Promise.all([
+                const [dadosServidor, configRemota] = await Promise.all([
                     requisitarAPI("/api/registros"),
                     requisitarAPI("/api/configuracoes")
                 ]);
                 if (!dadosServidor || !configServidor) throw new Error("Dados incompletos do servidor.");
                 let dados = normalizarRegistros(dadosServidor);
+                let configServidor = configRemota;
 
                 const locais = carregarRegistros();
                 if (Object.keys(locais).length) {
@@ -88,6 +89,24 @@ const STORAGE_PONTO = "meu_ponto_registros";
                         }
                         dados = normalizarRegistros(await requisitarAPI("/api/registros"));
                     }
+                }
+                // Só oferece copiar configurações antigas quando o servidor ainda usa padrões iniciais.
+                const configLocal = carregarConfiguracoesLocais();
+                const configPadrao = { nome: "", jornada: "08:00", inicioSemana: "1" };
+                const migrarConfig = oferecerMigracao
+                    && !localStorage.getItem("meu_ponto_backup_restaurado")
+                    && localStorage.getItem(STORAGE_CONFIG)
+                    && Object.entries(configPadrao).every(([campo, valor]) => configServidor[campo] === valor)
+                    && Object.entries(configPadrao).some(([campo, valor]) => configLocal[campo] !== valor);
+                if (migrarConfig && window.confirm(
+                    "Há configurações antigas neste navegador e o SQLite ainda usa as configurações padrão. " +
+                    "Deseja copiá-las para o banco? Se cancelar, a cópia local será preservada."
+                )) {
+                    configServidor = await requisitarAPI("/api/configuracoes", {
+                        method: "PUT",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(configLocal)
+                    });
                 }
                 const conflitantes = Object.keys(locais).filter(data =>
                     Object.hasOwn(dados, data) && JSON.stringify(dados[data]) !== JSON.stringify(locais[data])
@@ -648,12 +667,14 @@ async function baterPonto() {
         }
 
         function exportarJSON() {
+            if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o SQLite para fazer backup.");
             const backup = { versao: 1, exportadoEm: new Date().toISOString(), configuracoes, registros };
             baixarArquivo(`backup-meu-ponto-${dataHoje()}.json`, JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
             mostrarMensagem("Backup JSON baixado.");
         }
 
         function exportarCSV() {
+            if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o SQLite para exportar CSV.");
             const mes = document.getElementById("mesFiltro").value;
             const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo"]];
             Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
@@ -691,8 +712,13 @@ async function baterPonto() {
                     })
                 });
                 // Não oferecer migração local logo após substituir o banco intencionalmente.
-                localStorage.setItem("meu_ponto_backup_restaurado", "1");
+                try {
+                    localStorage.setItem("meu_ponto_backup_restaurado", "1");
+                } catch (erroLocal) {
+                    console.warn("Não foi possível registrar a preferência de migração local:", erroLocal);
+                }
                 await carregarDadosIniciais({ oferecerMigracao: false });
+                if (!pontoServidorPronto) throw new Error("Restauração concluída no SQLite, mas não foi possível recarregar a interface.");
                 mostrarMensagem("Backup restaurado no SQLite.");
             } catch (erro) {
                 console.error("Falha ao restaurar o backup:", erro);
