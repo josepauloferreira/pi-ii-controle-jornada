@@ -98,6 +98,7 @@ Para parar o servidor, pressione `Ctrl+C` no terminal.
 | DELETE | `/api/registros/:data` | Excluir um dia |
 | GET | `/api/configuracoes` | Consultar configurações |
 | PUT | `/api/configuracoes` | Salvar configurações |
+| PUT | `/api/backup` | Restaurar todos os registros e configurações (transação) |
 
 Exemplo: com o servidor iniciado, acesse `http://localhost:3000/api/registros` no Codespaces para visualizar os registros em JSON. A restauração de backup utiliza `PUT /api/backup` com confirmação pela interface.
 
