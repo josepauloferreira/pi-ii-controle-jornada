@@ -75,19 +75,31 @@ const STORAGE_PONTO = "meu_ponto_registros";
                     document.getElementById("btnBackupLocal").style.display = "inline-block";
                 }
 
-                const faltantes = Object.keys(locais).filter(data => !Object.hasOwn(dados, data));
+                const faltantes = Object.keys(locais).filter(data => {
+                    const dataReal = new Date(`${data}T00:00:00Z`);
+                    return !Object.hasOwn(dados, data)
+                        && !Number.isNaN(dataReal.getTime())
+                        && dataReal.toISOString().slice(0, 10) === data;
+                });
                 if (oferecerMigracao && faltantes.length && !localStorage.getItem("meu_ponto_backup_restaurado")) {
                     if (window.confirm(
                         `Foram encontrados ${faltantes.length} dia(s) no navegador que não estão no SQLite. ` +
                         "Deseja copiá-los para o banco? Dias já existentes no banco não serão substituídos. " +
                         "Se preferir, cancele e baixe o backup local antigo."
                     )) {
+                        let falhas = 0;
                         for (const data of faltantes) {
-                            // Revalida antes de gravar, para preservar dias criados após o carregamento.
-                            const atual = await requisitarRegistro(data);
-                            if (!atual) await salvarRegistroNoServidor(data, locais[data]);
+                            try {
+                                // Não sobrescreve dias que possam ter sido criados no servidor.
+                                const atual = await requisitarRegistro(data);
+                                if (!atual) await salvarRegistroNoServidor(data, locais[data]);
+                            } catch (erroMigracao) {
+                                console.warn("Não foi possível migrar um dia local:", data, erroMigracao);
+                                falhas++;
+                            }
                         }
                         dados = normalizarRegistros(await requisitarAPI("/api/registros"));
+                        if (falhas) mostrarMensagem(`${falhas} dia(s) não foram migrados. Preserve o backup local e tente novamente.`);
                     }
                 }
                 // Só oferece copiar configurações antigas quando o servidor ainda usa padrões iniciais.
@@ -96,6 +108,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 const migrarConfig = oferecerMigracao
                     && !localStorage.getItem("meu_ponto_backup_restaurado")
                     && localStorage.getItem(STORAGE_CONFIG)
+                    && horarioValido(configLocal.jornada)
+                    && (configLocal.inicioSemana === "0" || configLocal.inicioSemana === "1")
                     && Object.entries(configPadrao).every(([campo, valor]) => configServidor[campo] === valor)
                     && Object.entries(configPadrao).some(([campo, valor]) => configLocal[campo] !== valor);
                 if (migrarConfig && window.confirm(
