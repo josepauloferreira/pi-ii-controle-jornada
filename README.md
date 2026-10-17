@@ -1,174 +1,205 @@
-# Sistema de Controle de Jornada
+# Meu Ponto — Sistema de Controle de Jornada
 
-Projeto Integrador em Computação II — UNIVESP (2026).
+**Projeto Integrador em Computação II · UNIVESP · 2026**
 
-Aplicação web para registrar e acompanhar a jornada de trabalho em home office. Trata-se de um **protótipo acadêmico de uso individual**, com interface responsiva, API Express e persistência em SQLite.
+Aplicação web para registrar e acompanhar a jornada de trabalho em home office. Reúne marcações de ponto, histórico, saldo de horas e backups em uma interface responsiva, com autenticação de conta única e persistência no servidor.
 
-## Estado do projeto e roadmap
+[Executar localmente](#executar-localmente) · [Funcionalidades](#funcionalidades) · [Arquitetura e ambientes](#arquitetura-e-ambientes) · [Testes](#testes) · [Documentação](#documentação)
 
-As entregas planejadas para o software foram integradas à branch `main`:
-
-- [x] [1. Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
-- [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
-- [x] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
-- [x] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
-- [x] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18) ([PR #23](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/23))
-- [x] [6. Cadastro e login de conta única — #22](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/22) ([PR #24](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/24))
-- [x] Padronizar os campos de horário em 24 horas ([PR #25](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/25))
-
-A implementação concluída no repositório **não significa homologação como sistema oficial de controle de ponto**, nem substitui a validação externa e as entregas acadêmicas.
+> Protótipo acadêmico de uso individual. Utilize dados fictícios na demonstração. A aplicação não é homologada como sistema oficial de controle de ponto.
 
 ## Funcionalidades
 
-- Registrar entrada, saída para almoço, retorno e saída do expediente.
-- Consultar horas trabalhadas, jornada prevista e saldo diário. Enquanto o expediente está incompleto, o saldo mostra **"Em andamento"**.
-- Consultar o histórico por mês, editar ou excluir registros e gerenciar batidas extras.
-- Configurar nome de exibição, jornada diária e início da semana.
-- Exportar histórico em CSV, baixar backup JSON e restaurar dados mediante confirmação.
-- Criar uma única conta pessoal, entrar, sair e trocar a própria senha.
+- **Registro de ponto:** entrada, saída para almoço, retorno e saída do expediente.
+- **Acompanhamento diário:** horas trabalhadas, jornada prevista e saldo; expedientes incompletos aparecem como “Em andamento”.
+- **Histórico mensal:** consulta, edição e exclusão de registros, incluindo batidas extras com descrição.
+- **Configurações pessoais:** nome de exibição, jornada diária e início da semana.
+- **Exportação e backup:** histórico em CSV, backup JSON e restauração transacional mediante confirmação.
+- **Acesso pessoal:** cadastro inicial de uma conta, login, logout e troca de senha com invalidação das sessões anteriores.
 
-**Horários em 24 horas:** os campos de configuração, edição de registros e batidas extras usam `HH:mm`, sem AM/PM (por exemplo, `08:30` e `18:30`). É possível digitar `1830`; o campo converte para `18:30`. Valores fora de `00:00` a `23:59` são inválidos. O relógio também é exibido em 24 horas. A gravação dos horários continua usando o formato `HH:mm` no SQLite.
+Todos os horários usam **24 horas**, no formato `HH:mm`. Por exemplo, `08:30` e `18:30`; ao digitar `1830`, o campo converte para `18:30`. Valores fora de `00:00` a `23:59` são rejeitados.
 
-## Tecnologias
+## Arquitetura e ambientes
 
-- **Frontend:** HTML, CSS, JavaScript puro e Vite (sem React).
-- **Backend:** Node.js e Express.
-- **Persistência:** SQLite com `better-sqlite3` no desenvolvimento; Turso libSQL remoto na Vercel.
-- **Autenticação:** conta única, hash de senha `scrypt`, sessões no banco e cookie de sessão.
+O frontend usa **HTML, CSS, JavaScript e Vite**. A API é desenvolvida com **Node.js e Express**, com dois adaptadores de persistência que mantêm o mesmo contrato HTTP.
 
-**Requisito:** Node.js 24 LTS (ou 22.12+) e npm. Para os comandos abaixo, use um terminal na **raiz do repositório**.
+| Ambiente | Frontend | API | Persistência |
+| --- | --- | --- | --- |
+| Desenvolvimento local | Vite, porta `5173` | `backend/server.js`, porta `3000` | SQLite com `better-sqlite3` |
+| Preview | Arquivos estáticos na Vercel | Vercel Function → `backend/cloud.cjs` | Turso libSQL exclusivo de testes |
+| Produção | Arquivos estáticos na Vercel | Mesma Function | Turso libSQL e credenciais próprios |
 
-## Instalação e execução
+Localmente, o Vite encaminha `/api` para o Express. Na Vercel, `api/index.js` recebe as chamadas da API e utiliza `@libsql/client/web` para acessar o Turso. Credenciais ficam exclusivamente no servidor; a Function não depende de um arquivo SQLite persistente.
 
-### 1. Instalar dependências
+**Os ambientes têm bancos independentes.** Registros, contas e configurações não são sincronizados automaticamente entre local, Preview e produção.
 
-O frontend e o backend têm `package.json` separados. Instale ambos:
+## Executar localmente
 
-~~~bash
+### Requisitos
+
+- **Node.js 24 LTS**, recomendado; também é aceita a série 22 a partir de `22.12`.
+- **npm** e **Git**.
+
+Os comandos abaixo partem da raiz do repositório.
+
+### 1. Obter o projeto e instalar as dependências
+
+```bash
+git clone https://github.com/josepauloferreira/pi-ii-controle-jornada.git
+cd pi-ii-controle-jornada
 npm ci
 npm --prefix backend ci
-~~~
+```
 
-### 2. Iniciar frontend e backend com um comando (Linux / Codespaces)
+Frontend e backend possuem lockfiles próprios. Use `npm ci` para reproduzir as versões versionadas. O backend local usa o módulo nativo `better-sqlite3`; se a instalação for bloqueada pela política de scripts do npm, consulte o [guia de instalação e deploy](DEPLOY-VERCEL.md#instalação-e-testes-reproduzíveis).
 
-~~~bash
-node backend/server.js & BACKEND_PID=$!; trap 'kill "$BACKEND_PID" 2>/dev/null' EXIT; npm run dev
-~~~
+### 2. Iniciar a API
 
-Este comando inicia o **Express na porta 3000** e o **Vite na porta 5173** na mesma sessão de terminal Bash/zsh. Para encerrar, pressione `Ctrl+C`. Abra a interface em **http://localhost:5173**.
+Em um terminal:
 
-O Vite encaminha as chamadas `/api` para `http://127.0.0.1:3000`. O endereço da porta **3000** apresenta a demonstração legada (`backend/demo.html`), **não** a interface principal com tela de autenticação.
-
-No **GitHub Codespaces**, abra a aplicação pela porta **5173** e mantenha as portas **5173 e 3000 como Private**, especialmente antes de criar a primeira conta.
-
-### Alternativa: dois terminais
-
-Na raiz do repositório, execute em terminais diferentes:
-
-**Terminal 1 — backend**
-~~~bash
+```bash
 npm --prefix backend start
-~~~
+```
 
-**Terminal 2 — frontend**
-~~~bash
+### 3. Iniciar a interface
+
+Em outro terminal:
+
+```bash
 npm run dev
-~~~
+```
 
-> A aplicação precisa dos dois servidores para consultar e salvar registros. Não é necessário publicar a porta do backend.
+Abra **[http://localhost:5173](http://localhost:5173)**. Mantenha os dois processos em execução e encerre cada um com `Ctrl+C`.
 
-## Cadastro inicial, login e segurança
+A porta `3000` atende à API e à demonstração legada; a interface atual, com autenticação, está na porta `5173`. No GitHub Codespaces, abra a porta `5173` e mantenha ambas as portas como **Private**, inclusive durante o primeiro cadastro.
 
-No primeiro acesso, aparece **Criar conta**. Escolha um nome de usuário e uma senha de pelo menos **12 caracteres**; não há senha ou usuário predefinidos. Após a criação da primeira conta, o backend bloqueia novos cadastros e a tela passa a oferecer somente **Entrar**.
+## Cadastro inicial e segurança
 
-A conta é pessoal e única: **não existe painel de administradores, múltiplos funcionários ou recuperação pública de senha**. Após entrar, é possível sair ou alterar a senha. A alteração invalida sessões anteriores.
+**Cada instalação admite uma única conta.** Quando seu banco ainda não tem conta, aparece **Criar conta**. Depois do cadastro, a tela oferece apenas **Entrar** e o backend bloqueia novos cadastros. A ausência do botão de cadastro em uma instalação já inicializada é o comportamento esperado.
 
-- Senhas são armazenadas como hash `scrypt` com salt aleatório, não em texto simples.
-- As sessões ficam no SQLite; o navegador recebe cookie `HttpOnly` e `SameSite=Strict`, com `Secure` quando a requisição chega por HTTPS.
-- Histórico, registros, configurações e restauração de backups exigem login. Operações de escrita também verificam o token CSRF da sessão.
-- Há limitação de tentativas de login.
+O usuário deve ter de 3 a 40 caracteres, começar com uma letra e usar letras, números, ponto, hífen ou sublinhado. A senha exige pelo menos **12 caracteres**, com limite de 256 bytes. Não existem credenciais predefinidas, painel de administradores, múltiplos funcionários ou recuperação pública de senha.
 
-**Importante:** quem primeiro acessar uma instância ainda sem conta pode registrar a conta única. **Não exponha publicamente uma instalação vazia**; no Preview, mantenha Vercel Authentication ativa. Este protótipo não deve ser tratado como serviço pronto para dados pessoais sensíveis.
+- Senhas são armazenadas com **scrypt e salt aleatório**.
+- Sessões ficam no banco; cookies usam `HttpOnly`, `SameSite=Strict` e `Secure` em HTTPS.
+- Rotas de dados exigem autenticação, e operações de escrita também exigem o token **CSRF** da sessão.
+- O login tem limite de tentativas. Na nuvem, o controle é compartilhado entre as instâncias da Function.
+- A troca de senha invalida todas as sessões anteriores.
 
-## Banco de dados, histórico antigo e backups
+Quem acessa primeiro uma base vazia pode criar sua conta única. Mantenha o **Preview protegido por Vercel Authentication**. Em produção, faça o primeiro cadastro no deployment protegido antes de liberar o domínio público, conforme o [procedimento de publicação](DEPLOY-VERCEL.md).
 
-O arquivo padrão é `backend/dados/jornada.db`, criado automaticamente pelo backend. A pasta `backend/dados/` está no `.gitignore` e **não é enviada ao GitHub**. Excluir o ambiente onde o backend roda pode significar perder seus dados; mantenha backups fora desse ambiente.
+## Dados e backups
 
-O cadastro da conta **não apaga nem transfere os registros anteriores** das tabelas de jornada. As tabelas de conta e sessões são adicionais.
+### Armazenamento
 
-- O SQLite é a fonte principal dos registros e das configurações.
-- Registros antigos no `localStorage` continuam preservados no navegador. Se houver dias locais ausentes no SQLite, a interface oferece migração **opcional** somente dessas datas, sem substituir registros já existentes no servidor.
-- É possível baixar separadamente os dados antigos do navegador. Dados de origens diferentes (como outro navegador ou endereço) não são migrados automaticamente.
-- **Fazer backup** gera JSON dos dados atuais do SQLite; **Exportar CSV** usa o histórico persistido.
-- **Restaurar backup** substitui todos os registros do SQLite e, se houver configurações no arquivo, também as configurações, mediante confirmação. A operação é transacional, e arquivos inválidos são rejeitados sem substituir os dados.
+O backend local cria `backend/dados/jornada.db`. Essa pasta é ignorada pelo Git e excluída dos uploads para a Vercel. Para usar outra base local, defina `MEU_PONTO_DB_PATH` com o caminho de um arquivo em uma pasta existente.
 
-Antes de realizar testes manuais que envolvam criação de conta, troca de senha ou restauração, faça uma cópia do banco existente ou utilize uma base de testes. Para executar o backend com outra base, defina `MEU_PONTO_DB_PATH` apontando para um arquivo SQLite em uma pasta existente.
+Na nuvem, registros, configurações, conta, sessões e limites de login ficam no Turso. Um redeploy não substitui o banco remoto. Mantenha cópias de segurança fora do deployment.
 
-## Testes e verificação
+| Ação | Resultado |
+| --- | --- |
+| **Exportar CSV** | Baixa o histórico do mês selecionado para consulta em planilha. |
+| **Fazer backup** | Baixa JSON com registros e configurações do ambiente atual. |
+| **Restaurar backup** | Substitui todos os registros do destino e as configurações presentes no arquivo, após confirmação. |
 
-Na raiz do repositório, depois de instalar as dependências:
+Backups JSON **não incluem senhas nem sessões**. A restauração valida o conteúdo antes da escrita e aplica as alterações em transação; uma falha causa rollback. Faça um backup atual antes de restaurar e confira o ambiente de destino. O CSV não é um formato de restauração.
 
-~~~bash
+### Dados do protótipo antigo
+
+Registros antigos do `localStorage` permanecem preservados no navegador. Quando encontra datas locais ausentes no servidor, a interface oferece uma migração **opcional**, sem substituir dias já existentes. Também é possível baixar uma cópia separada desses dados antigos. Informações de outro navegador ou endereço não são migradas automaticamente.
+
+O cadastro de uma conta não apaga registros de jornada já existentes. A transferência entre ambientes é manual, por backup JSON, e deve ser autorizada pelo responsável pelos dados.
+
+## Testes
+
+Depois da instalação, execute na raiz:
+
+```bash
 npm --prefix backend test
 npm run test:cloud
 npm run build
-~~~
+```
 
-O teste automatizado do backend usa um **SQLite temporário**, sem modificar `backend/dados/jornada.db`. As suítes local e libSQL compartilham testes do contrato HTTP de registros, horários, extras, configurações e backups. A suíte de nuvem verifica persistência entre clientes, limite concorrente de login e rollback de restauração após falha SQL. O teste original cobre cadastro concorrente de conta única, login, autorização de rotas, CSRF, preservação de registro antigo, troca de senha, logout e limite de tentativas.
+| Verificação | Cobertura e resultado registrado |
+| --- | --- |
+| Backend local | **17 testes aprovados**, usando SQLite temporário. |
+| API de nuvem e entrada serverless | **41 testes aprovados**, usando libSQL temporário. |
+| Build do frontend | `vite build`, com saída em `dist/`. |
+| Preview hospedado | **14 cenários aprovados** com API real, Turso e Chromium/Playwright. |
 
-O build do frontend usa `vite build` e gera a pasta `dist/`, ignorada pelo Git. Os testes automatizados e o build foram executados e aprovados durante a integração da autenticação. **Não há workflow de CI configurado no repositório**; novas alterações precisam ser verificadas novamente.
+As suítes verificam autenticação, cadastro concorrente, sessões, CSRF, troca de senha, limite de login, horários, registros, extras, histórico, configurações e backups. A suíte de nuvem também verifica múltiplos clientes, persistência após reinicialização e rollback diante de falha SQL durante a restauração.
 
-A versão com horários de 24 horas exige também conferência visual nos navegadores utilizados, incluindo digitação de `1830` → `18:30`, edição de batidas e login.
+**Os testes locais não usam o banco do usuário nem o de produção.** A validação hospedada foi feita somente com dados fictícios; o relatório em [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md) diferencia os resultados locais dos obtidos na Vercel.
 
-## Estrutura principal
+O build e os checks de deployment da Vercel não executam automaticamente essas suítes. Ainda não há workflow de CI de testes; repita os comandos antes de integrar alterações. A pasta `dist/` é gerada e ignorada pelo Git.
 
-~~~text
+## Hospedagem e configuração
+
+O [Preview da branch de deploy](https://pi-ii-controle-jornada-git-feat-deploy-vercel-turso-ze17.vercel.app) exige acesso pela Vercel. Cada ambiente mantém sua própria conta única.
+
+| Variável | Uso |
+| --- | --- |
+| `TURSO_DATABASE_URL` | URL libSQL do banco exclusivo do ambiente Vercel. |
+| `TURSO_AUTH_TOKEN` | Token privado desse banco, armazenado como Secret na Vercel. |
+| `MEU_PONTO_DB_PATH` | Opcional, somente no backend SQLite local. |
+
+O desenvolvimento local padrão não exige credenciais Turso. O arquivo [.env.example](.env.example) documenta os nomes das variáveis, sem valores privados. Não use prefixo `VITE_` para segredos e não versione arquivos de ambiente, tokens ou cookies.
+
+O projeto Vercel utiliza Node.js `24.x`, preset Vite, instalação `npm ci`, build `npm run build`, saída `dist` e região `iad1`. Preview usa `meu-ponto-pi2-preview`; produção usa `meu-ponto-pi2-prod`, com credenciais próprias e sem importação automática de dados.
+
+Deployments de branches geram previews. O deploy automático da `main` está desabilitado para permitir uma publicação controlada de produção: gerar o deployment com `--target production --skip-domain`, inicializar a conta sob proteção e promover o deployment validado. Os comandos completos, a rotação de tokens e o processo de atualização estão em [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md).
+
+## Estrutura do repositório
+
+```text
 .
-├── index.html                # Interface atual do Vite
+├── index.html                 # Interface da aplicação
 ├── src/
-│   ├── main.js               # Fluxos de interface e chamadas à API
-│   └── style.css             # Estilos e responsividade
-├── vite.config.js            # Proxy /api → backend
-├── package.json              # Frontend
+│   ├── main.js                # Interações, autenticação e chamadas à API
+│   └── style.css              # Estilos e responsividade
+├── api/index.js               # Entrada da Vercel Function
 ├── backend/
-│   ├── server.js             # Servidor Express e rotas da API
-│   ├── auth.js               # Cadastro, login e sessões
-│   ├── auth.test.js          # Teste de integração da autenticação
-│   ├── database.js           # Tabelas do SQLite
-│   ├── demo.html             # Demonstração antiga
-│   └── package.json          # Backend
-└── Projeto-PI-Ponto.html     # Protótipo original com armazenamento local
-~~~
+│   ├── server.js              # API Express local
+│   ├── auth.js                # Autenticação local
+│   ├── database.js            # Persistência SQLite local
+│   ├── cloud.cjs              # API Express com Turso libSQL
+│   ├── api-contract.cjs       # Contrato HTTP compartilhado pelos testes
+│   └── *.test.*               # Testes de integração
+├── vite.config.js             # Configuração e proxy de desenvolvimento
+├── vercel.json                # Build, região e roteamento de nuvem
+├── DEPLOY-VERCEL.md            # Instalação, ambientes e publicação
+├── VALIDACAO-PREVIEW.md        # Evidências da validação executada
+└── Projeto-PI-Ponto.html       # Protótipo original com armazenamento local
+```
 
-## Endereços da API
+## API
 
-| Método | Rota | Descrição |
+Todas as rotas usam o prefixo `/api`. Dados de jornada exigem sessão autenticada; escritas autenticadas exigem o header `X-CSRF-Token`.
+
+| Método | Rota | Finalidade |
 | --- | --- | --- |
-| GET | `/api/health` | Estado básico do servidor |
-| GET | `/api/auth/status` | Verificar disponibilidade do cadastro inicial |
-| POST | `/api/auth/register` | Criar a conta única na primeira visita |
-| POST | `/api/auth/login` | Entrar |
-| GET | `/api/auth/me` | Consultar a sessão |
-| POST | `/api/auth/logout` | Encerrar a sessão |
-| POST | `/api/auth/password` | Alterar senha da conta |
-| GET | `/api/registros` | Listar registros (aceita filtro `?mes=AAAA-MM`) |
-| GET | `/api/registros/:data` | Consultar um dia (`AAAA-MM-DD`) |
-| PUT | `/api/registros/:data` | Criar ou atualizar um dia |
-| DELETE | `/api/registros/:data` | Excluir um dia |
-| GET | `/api/configuracoes` | Consultar configurações |
-| PUT | `/api/configuracoes` | Atualizar configurações |
-| PUT | `/api/backup` | Restaurar registros e configurações |
+| `GET` | `/api/health` | Verificar disponibilidade; na nuvem, também verifica o banco. |
+| `GET` | `/api/auth/status` | Consultar se o cadastro inicial está disponível. |
+| `POST` | `/api/auth/register` | Criar a primeira e única conta. |
+| `POST` | `/api/auth/login` | Iniciar sessão. |
+| `GET` | `/api/auth/me` | Consultar a sessão autenticada. |
+| `POST` | `/api/auth/logout` | Encerrar sessão. |
+| `POST` | `/api/auth/password` | Alterar senha e invalidar sessões. |
+| `GET` | `/api/registros` | Listar registros; aceita `?mes=AAAA-MM`. |
+| `GET`, `PUT`, `DELETE` | `/api/registros/:data` | Consultar, salvar ou excluir um dia em `AAAA-MM-DD`. |
+| `GET`, `PUT` | `/api/configuracoes` | Consultar ou atualizar configurações. |
+| `PUT` | `/api/backup` | Restaurar registros e configurações. |
 
-As rotas de dados exigem sessão autenticada. As operações de escrita exigem também confirmação CSRF.
+## Documentação
 
-## Hospedagem com Vercel e Turso
+- [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md): instalação reproduzível, variáveis, proteção, atualizações e checklist de produção.
+- [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md): testes executados, persistência e limitações observadas.
+- [Issues do projeto](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues): planejamento e acompanhamento das entregas.
+- [Pull Requests](https://github.com/josepauloferreira/pi-ii-controle-jornada/pulls): histórico de implementação e revisão.
 
-O projeto oferece uma implantação com **frontend Vite na Vercel, API Express serverless e banco Turso libSQL remoto**. O backend SQLite local permanece disponível, sem mudanças no fluxo de desenvolvimento. Consulte **[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md)** para instalar, testar e configurar a hospedagem e **[VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md)** para os resultados realmente executados.
+## Contexto acadêmico e colaboração
 
-O Preview exige **Vercel Authentication / Standard Protection** antes do cadastro inicial e usa o banco separado `meu-ponto-pi2-preview`. Não associe previews ao banco de produção. A publicação em produção e o merge dependem de aprovação expressa. Consulte o guia para variáveis, atualizações, backups e checklist de produção.
+O projeto foi desenvolvido para o **Projeto Integrador em Computação II da UNIVESP**, com foco no acompanhamento individual de jornadas em home office. As entregas incluem organização com Vite, API Express/SQLite, integração do frontend, histórico, configurações, exportações, autenticação e horários em 24 horas.
 
-## Colaboração e limitações
+Para contribuir, descreva o problema em uma issue, trabalhe em branch própria e abra um Pull Request com as verificações realizadas. Preserve o contrato dos dois backends e seus testes.
 
-Para contribuir, escolha uma [issue](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues), trabalhe em branch própria e abra um Pull Request para revisão, em vez de editar a `main` diretamente.
-
-Este projeto é uma **demonstração acadêmica voltada ao uso individual**, não um produto homologado para controle legal de ponto. A implantação em hospedagem permanente, a validação externa com a comunidade e as evidências para o Relatório Final devem ser tratadas separadamente; **não são resultados já comprovados pelo código**.
+A execução dos testes e a hospedagem não comprovam homologação legal, disponibilidade contínua ou validação externa com a comunidade. Essas atividades e as evidências acadêmicas correspondentes devem ser registradas separadamente.

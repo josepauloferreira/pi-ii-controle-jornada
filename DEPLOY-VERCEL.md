@@ -8,7 +8,7 @@ O desenvolvimento local continua com Express e SQLite (`better-sqlite3`). Previe
 | --- | --- | --- | --- |
 | Local | Vite, porta 5173 | `backend/server.js`, porta 3000 | SQLite em `backend/dados/jornada.db`; não usa Turso |
 | Preview | `dist/` na CDN Vercel | `api/index.js` → `backend/cloud.cjs` | `meu-ponto-pi2-preview`, variáveis Preview da branch |
-| Production | A publicar somente após aprovação | Mesma Function | Banco separado `meu-ponto-pi2-prod`, token exclusivo Production |
+| Production | Publicação controlada, após aprovação | Mesma Function | Banco separado `meu-ponto-pi2-prod`, token exclusivo Production |
 
 O projeto existente é **ze17/pi-ii-controle-jornada**, ID `prj_63EqU9qanGHdPO7gBb7RTtHZoVsD`, vinculado a `josepauloferreira/pi-ii-controle-jornada`. Não crie outro projeto.
 
@@ -135,9 +135,30 @@ No aplicativo, **Fazer backup** baixa JSON com registros e configurações, sem 
 
 Erros retornam mensagens genéricas e os logs remotos não imprimem objetos de transporte que possam conter segredos. As implementações de persistência permanecem separadas para preservar o fluxo SQLite; o contrato HTTP é testado em ambas, evitando uma refatoração extensa.
 
-## Checklist de produção — aguardar aprovação expressa
+## Publicação controlada de produção
 
-- [ ] PR revisado, merge e publicação expressamente aprovados.
+O merge e a publicação foram autorizados pelo responsável. O deploy automático da `main` está desabilitado em `vercel.json` para impedir a exposição de uma base ainda sem conta. Os previews de outras branches continuam automáticos.
+
+Após integrar a revisão aprovada à `main`, confira que o checkout contém exatamente esse commit e execute:
+
+```bash
+vercel deploy --target production --skip-domain --scope ze17
+vercel inspect https://URL-PRODUCTION-PROTEGIDA --scope ze17
+```
+
+O deployment deve usar exclusivamente as variáveis Production e o banco `meu-ponto-pi2-prod`. Antes de compartilhar a URL, confirme que o endereço gerado exige Vercel Authentication. O responsável cria sua própria conta nesse endereço protegido, escolhendo sua senha diretamente no aplicativo. Não copie contas, hashes, registros ou sessões do Preview.
+
+Depois de confirmar que a conta foi inicializada e validar a aplicação, publique o mesmo deployment:
+
+```bash
+vercel promote https://URL-PRODUCTION-PROTEGIDA --scope ze17
+```
+
+Atualizações de produção seguem o mesmo fluxo: testes, revisão, merge, deployment com `--skip-domain`, validação e promoção. Não execute testes de restauração destrutivos na base de produção; ensaie o procedimento em Preview com dados fictícios.
+
+## Checklist de produção
+
+- [x] PR revisado, merge e publicação expressamente aprovados pelo responsável.
 - [ ] Criar `meu-ponto-pi2-prod` como libSQL, sem copiar dados de outro banco.
 - [ ] Configurar URL e token próprios somente em Production.
 - [ ] Conferir repositório vinculado e branch de produção `main`.
@@ -146,6 +167,6 @@ Erros retornam mensagens genéricas e os logs remotos não imprimem objetos de t
 - [ ] Conferir conta e registros após redeploy; testar backup e recuperação com dados fictícios.
 - [ ] Manter a demonstração sem dados pessoais reais e monitorar limites gratuitos.
 
-Não existe banco de produção criado por este fluxo de Preview. O deployment atribuído automaticamente a Production no primeiro uso da CLI foi contido e removido, e não existe versão Production ativa; consulte [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md). Merge, credenciais Production e publicação de produção são etapas posteriores sujeitas à autorização.
+O histórico de validação do Preview e da contenção do primeiro deployment automático está em [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md). A publicação de produção utiliza banco próprio e inicialização controlada, conforme o procedimento acima.
 
 Referências: [Vite na Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Functions Node.js](https://vercel.com/docs/functions/runtimes/node-js), [rewrites](https://vercel.com/docs/rewrites), [Turso](https://docs.turso.tech/quickstart), [transações libSQL](https://tursodatabase.github.io/libsql-client-ts/interfaces/Client.html).
