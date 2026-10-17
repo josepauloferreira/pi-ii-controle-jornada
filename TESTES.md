@@ -85,7 +85,7 @@ A rotina instala as dependências com os lockfiles, executa ambas as suítes e c
 - [Acompanhar execuções](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml)
 - [Execução inicial bem-sucedida (Node 22 e 24)](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752)
 
-A incorporação desse workflow à `main` depende do [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). A aprovação dos checks e a política de proteção da `main` são assuntos distintos: configurar regras de branch ainda é uma etapa administrativa.
+O workflow foi integrado à `main` pelo [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). A aprovação dos checks e a política de proteção da `main` são assuntos distintos: configurar regras de branch ainda é uma etapa administrativa.
 
 ## Validação hospedada: evidência, não suíte reproduzível
 
