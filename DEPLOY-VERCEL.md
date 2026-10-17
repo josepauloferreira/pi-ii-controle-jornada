@@ -152,6 +152,7 @@ Depois de confirmar que a conta foi inicializada e validar a aplicação, publiq
 
 ```bash
 vercel promote https://URL-PRODUCTION-PROTEGIDA --scope ze17
+vercel alias set https://URL-PRODUCTION-PROTEGIDA pi-ii-controle-jornada.vercel.app --scope ze17
 ```
 
 Atualizações de produção seguem o mesmo fluxo: testes, revisão, merge, deployment com `--skip-domain`, validação e promoção. Não execute testes de restauração destrutivos na base de produção; ensaie o procedimento em Preview com dados fictícios.
@@ -159,11 +160,11 @@ Atualizações de produção seguem o mesmo fluxo: testes, revisão, merge, depl
 ## Checklist de produção
 
 - [x] PR revisado, merge e publicação expressamente aprovados pelo responsável.
-- [ ] Criar `meu-ponto-pi2-prod` como libSQL, sem copiar dados de outro banco.
-- [ ] Configurar URL e token próprios somente em Production.
-- [ ] Conferir repositório vinculado e branch de produção `main`.
-- [ ] Inicializar a conta sob condições controladas: o primeiro visitante de uma base vazia pode cadastrá-la.
-- [ ] Publicar com HTTPS e validar autenticação, CSRF e cookies.
+- [x] Criar `meu-ponto-pi2-prod` como libSQL, sem copiar dados de outro banco.
+- [x] Configurar URL e token próprios somente em Production.
+- [x] Conferir repositório vinculado e branch de produção `main`.
+- [x] Conta criada pelo responsável na URL protegida, antes da liberação final do domínio público.
+- [x] Publicar com HTTPS; dados privados exigem autenticação e novos cadastros são bloqueados. CSRF e cookies foram exercitados na suíte e no Preview.
 - [ ] Conferir conta e registros após redeploy; testar backup e recuperação com dados fictícios.
 - [ ] Manter a demonstração sem dados pessoais reais e monitorar limites gratuitos.
 

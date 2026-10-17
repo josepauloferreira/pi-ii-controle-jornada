@@ -4,7 +4,7 @@
 
 Aplicação web para registrar e acompanhar a jornada de trabalho em home office. Reúne marcações de ponto, histórico, saldo de horas e backups em uma interface responsiva, com autenticação de conta única e persistência no servidor.
 
-[Executar localmente](#executar-localmente) · [Funcionalidades](#funcionalidades) · [Arquitetura e ambientes](#arquitetura-e-ambientes) · [Testes](#testes) · [Documentação](#documentação)
+[Acessar demonstração](https://pi-ii-controle-jornada.vercel.app) · [Executar localmente](#executar-localmente) · [Funcionalidades](#funcionalidades) · [Arquitetura e ambientes](#arquitetura-e-ambientes) · [Testes](#testes) · [Documentação](#documentação)
 
 > Protótipo acadêmico de uso individual. Utilize dados fictícios na demonstração. A aplicação não é homologada como sistema oficial de controle de ponto.
 
@@ -134,6 +134,8 @@ O build e os checks de deployment da Vercel não executam automaticamente essas 
 
 ## Hospedagem e configuração
 
+**Demonstração online:** [pi-ii-controle-jornada.vercel.app](https://pi-ii-controle-jornada.vercel.app). A instalação de produção já possui sua conta única; o acesso ao painel exige login.
+
 O [Preview da branch de deploy](https://pi-ii-controle-jornada-git-feat-deploy-vercel-turso-ze17.vercel.app) exige acesso pela Vercel. Cada ambiente mantém sua própria conta única.
 
 | Variável | Uso |
@@ -192,7 +194,8 @@ Todas as rotas usam o prefixo `/api`. Dados de jornada exigem sessão autenticad
 ## Documentação
 
 - [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md): instalação reproduzível, variáveis, proteção, atualizações e checklist de produção.
-- [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md): testes executados, persistência e limitações observadas.
+- [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md): testes executados, persistência e limitações observadas no Preview.
+- [VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md): publicação, separação dos bancos e verificações do domínio público.
 - [Issues do projeto](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues): planejamento e acompanhamento das entregas.
 - [Pull Requests](https://github.com/josepauloferreira/pi-ii-controle-jornada/pulls): histórico de implementação e revisão.
 
