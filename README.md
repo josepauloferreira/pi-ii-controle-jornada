@@ -1,10 +1,12 @@
-# Meu Ponto — Sistema de Controle de Jornada
+# Meu Ponto
 
-**Projeto Integrador em Computação II · UNIVESP · 2026**
+**Sistema de Controle de Jornada · Projeto Integrador em Computação II · UNIVESP · 2026**
 
-Aplicação web para registrar e acompanhar a jornada de trabalho em home office. Reúne marcações de ponto, histórico, saldo de horas e backups em uma interface responsiva, com autenticação de conta única e persistência no servidor.
+[![CI — testes e build](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml)
 
-[Acessar demonstração](https://pi-ii-controle-jornada.vercel.app) · [Executar localmente](#executar-localmente) · [Funcionalidades](#funcionalidades) · [Arquitetura e ambientes](#arquitetura-e-ambientes) · [Testes](#testes) · [Documentação](#documentação)
+Uma aplicação web de **acompanhamento individual da jornada em home office**. Permite registrar marcações de ponto, calcular horas trabalhadas e saldo, consultar o histórico e exportar os dados — em uma interface responsiva, com autenticação e persistência no servidor.
+
+**[Acessar demonstração](https://pi-ii-controle-jornada.vercel.app)** · [Executar localmente](#executar-localmente) · [Arquitetura](#arquitetura-e-ambientes) · [Testes e qualidade](#testes-e-qualidade) · [Documentação](#documentação)
 
 > Protótipo acadêmico de uso individual. Utilize dados fictícios na demonstração. A aplicação não é homologada como sistema oficial de controle de ponto.
 
@@ -32,6 +34,20 @@ O frontend usa **HTML, CSS, JavaScript e Vite**. A API é desenvolvida com **Nod
 Localmente, o Vite encaminha `/api` para o Express. Na Vercel, `api/index.js` recebe as chamadas da API e utiliza `@libsql/client/web` para acessar o Turso. Credenciais ficam exclusivamente no servidor; a Function não depende de um arquivo SQLite persistente.
 
 **Os ambientes têm bancos independentes.** Registros, contas e configurações não são sincronizados automaticamente entre local, Preview e produção.
+
+```mermaid
+flowchart LR
+  subgraph local["Desenvolvimento local"]
+    vite["Vite · porta 5173"] -->|"/api"| express["Express · porta 3000"]
+    express --> sqlite[("SQLite local")]
+  end
+  subgraph hosted["Preview e produção · Vercel"]
+    frontend["Frontend estático · CDN"] -->|"/api"| function["Express · Vercel Function"]
+    function --> turso[("Turso libSQL remoto")]
+  end
+```
+
+A arquitetura preserva o mesmo **contrato HTTP** em desenvolvimento e na nuvem. As duas implementações são verificadas pelo conjunto compartilhado de testes de integração descrito em [TESTES.md](TESTES.md).
 
 ## Executar localmente
 
@@ -109,28 +125,31 @@ Registros antigos do `localStorage` permanecem preservados no navegador. Quando 
 
 O cadastro de uma conta não apaga registros de jornada já existentes. A transferência entre ambientes é manual, por backup JSON, e deve ser autorizada pelo responsável pelos dados.
 
-## Testes
+## Testes e qualidade
 
-Depois da instalação, execute na raiz:
+O projeto tem **testes automatizados de integração HTTP** para SQLite e libSQL, um teste do entrypoint serverless e evidências de validação na Vercel. As suítes de Node usam **bancos temporários**; não precisam de tokens Turso nem alteram dados reais.
+
+Depois de instalar as dependências (veja [Executar localmente](#executar-localmente)), execute:
 
 ```bash
-npm --prefix backend test
-npm run test:cloud
-npm run build
+npm --prefix backend test   # Express + SQLite
+npm run test:cloud          # Express + libSQL e roteamento da Vercel
+npm run build               # Compilação do frontend Vite
 ```
 
-| Verificação | Cobertura e resultado registrado |
-| --- | --- |
-| Backend local | **17 testes aprovados**, usando SQLite temporário. |
-| API de nuvem e entrada serverless | **41 testes aprovados**, usando libSQL temporário. |
-| Build do frontend | `vite build`, com saída em `dist/`. |
-| Preview hospedado | **14 cenários aprovados** com API real, Turso e Chromium/Playwright. |
+| Verificação | Como é executada | Evidência registrada |
+| --- | --- | --- |
+| Backend local SQLite | `backend/auth.test.js` + contrato compartilhado | **17 testes aprovados**, 0 falhas |
+| Backend em nuvem libSQL | `backend/cloud.test.cjs` + `backend/entry.test.cjs` | **41 testes aprovados**, 0 falhas |
+| Frontend | `npm run build` → `dist/` | Build Vite aprovado |
+| Preview hospedado | HTTP + navegador Chromium/Playwright, **não versionado como suíte E2E** | **14 cenários aprovados** |
+| Produção | Smoke tests de disponibilidade e acesso | Verificações registradas separadamente |
 
-As suítes verificam autenticação, cadastro concorrente, sessões, CSRF, troca de senha, limite de login, horários, registros, extras, histórico, configurações e backups. A suíte de nuvem também verifica múltiplos clientes, persistência após reinicialização e rollback diante de falha SQL durante a restauração.
+Os números acima vêm dos relatórios de 17/10/2026. Não são uma medição de percentual de cobertura nem uma nova execução desta documentação. O contrato em `backend/api-contract.cjs` cobre autenticação, CSRF, datas e horários `HH:mm`, histórico, configurações, backups e erros da API.
 
-**Os testes locais não usam o banco do usuário nem o de produção.** A validação hospedada foi feita somente com dados fictícios; o relatório em [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md) diferencia os resultados locais dos obtidos na Vercel.
+O workflow de **GitHub Actions** executa automaticamente as suítes e o build em **Node.js 22 e 24** para PRs direcionados à `main`. A [primeira execução da CI passou nas duas versões](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752); sua integração à `main` está prevista no [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). Testes E2E reproduzíveis e testes unitários dos cálculos de jornada ainda são melhorias futuras.
 
-O build e os checks de deployment da Vercel não executam automaticamente essas suítes. Ainda não há workflow de CI de testes; repita os comandos antes de integrar alterações. A pasta `dist/` é gerada e ignorada pelo Git.
+**[Ler a estratégia completa de testes, a matriz de cobertura e as limitações](TESTES.md)** · [Evidências do Preview](VALIDACAO-PREVIEW.md) · [Evidências de produção](VALIDACAO-PRODUCAO.md)
 
 ## Hospedagem e configuração
 
@@ -168,8 +187,10 @@ Deployments de branches geram previews. O deploy automático da `main` está des
 │   └── *.test.*               # Testes de integração
 ├── vite.config.js             # Configuração e proxy de desenvolvimento
 ├── vercel.json                # Build, região e roteamento de nuvem
-├── DEPLOY-VERCEL.md            # Instalação, ambientes e publicação
-├── VALIDACAO-PREVIEW.md        # Evidências da validação executada
+├── .github/workflows/ci.yml  # CI em Node.js 22 e 24 (PR #29)
+├── TESTES.md                  # Estratégia e matriz de testes
+├── DEPLOY-VERCEL.md           # Instalação, ambientes e publicação
+├── VALIDACAO-PREVIEW.md       # Evidências da validação executada
 └── Projeto-PI-Ponto.html       # Protótipo original com armazenamento local
 ```
 
@@ -193,6 +214,7 @@ Todas as rotas usam o prefixo `/api`. Dados de jornada exigem sessão autenticad
 
 ## Documentação
 
+- [TESTES.md](TESTES.md): comandos reproduzíveis, contrato compartilhado, matriz de testes, CI e limitações conhecidas.
 - [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md): instalação reproduzível, variáveis, proteção, atualizações e checklist de produção.
 - [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md): testes executados, persistência e limitações observadas no Preview.
 - [VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md): publicação, separação dos bancos e verificações do domínio público.
