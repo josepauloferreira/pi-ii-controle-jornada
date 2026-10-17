@@ -160,6 +160,12 @@ A versão com horários de 24 horas exige também conferência visual nos navega
 
 As rotas de dados exigem sessão autenticada. As operações de escrita exigem também confirmação CSRF.
 
+## Hospedagem com Vercel e Turso
+
+O projeto oferece uma implantação com **frontend Vite na Vercel, API Express serverless e banco Turso libSQL remoto**. O backend SQLite local permanece disponível, sem mudanças no fluxo de desenvolvimento. Consulte **[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md)** para instalar, testar e configurar a hospedagem.
+
+**Não compartilhe o endereço antes de criar a conta inicial** e não associe os deployments de preview ao banco de produção.
+
 ## Colaboração e limitações
 
 Para contribuir, escolha uma [issue](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues), trabalhe em branch própria e abra um Pull Request para revisão, em vez de editar a `main` diretamente.
