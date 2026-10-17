@@ -214,3 +214,74 @@ th:nth-child(9) { width: 16%; }
 @media (prefers-reduced-motion: reduce) {
   *,*::before,*::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+
+/* Cadastro e login pessoais */
+.auth-screen {
+  min-height: 100dvh;
+  padding: 26px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.auth-card {
+  width: min(100%, 420px);
+  padding: clamp(24px, 5vw, 38px);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+.auth-brand {
+  margin: 0 0 24px;
+  font-weight: 750;
+  font-size: 15px;
+  color: var(--blue-action);
+}
+.auth-card h1 {
+  font-size: clamp(27px, 5vw, 35px);
+  font-weight: 720;
+  letter-spacing: -.03em;
+  line-height: 1.2;
+  margin: 0 0 8px;
+}
+.auth-card > p:not(.auth-brand) {
+  margin: 0 0 25px;
+  color: var(--subtle);
+  font-size: 13px;
+}
+.auth-card .campo { margin-bottom: 17px; }
+.auth-submit {
+  width: 100%;
+  min-height: 46px;
+  margin-top: 6px;
+}
+.auth-error {
+  font-size: 13px;
+  color: var(--red);
+  margin: 10px 0 0;
+  overflow-wrap: anywhere;
+}
+.auth-error:empty { display: none; }
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+  align-items: center;
+  color: var(--subtle);
+  font-size: 12px;
+  margin-top: 14px;
+}
+.account-actions #usuarioAtual {
+  font-weight: 700;
+  margin-right: auto;
+  color: var(--text);
+}
+.account-actions .btn {
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 12px;
+}
+@media (max-width: 560px) {
+  .auth-card { padding: 27px 20px; }
+  .account-actions { gap: 8px; }
+}

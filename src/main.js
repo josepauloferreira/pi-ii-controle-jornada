@@ -6,24 +6,185 @@ const STORAGE_PONTO = "meu_ponto_registros";
         let mensagemTimer = null;
         let pontoServidorPronto = false;
         let registrandoPonto = false;
+        let usuarioLogado = null;
+        let csrfToken = null;
+        let cadastroInicial = false;
 
         document.addEventListener("DOMContentLoaded", () => {
-            carregarConfiguracoes();
             configurarCampos24Horas();
             configurarMesAtual();
             atualizarRelogio();
             window.setInterval(atualizarRelogio, 1000);
-            atualizarTela();
             document.getElementById("btnBaterPonto").disabled = true;
             document.getElementById("btnBackupLocal").addEventListener("click", exportarBackupLocal);
-            void carregarDadosIniciais();
+            document.getElementById("authForm").addEventListener("submit", enviarAutenticacao);
+            document.getElementById("btnSair").addEventListener("click", sairConta);
+            document.getElementById("btnTrocarSenha").addEventListener("click", () => {
+                document.getElementById("senhaError").textContent = "";
+                document.getElementById("senhaModal").style.display = "flex";
+                document.getElementById("senhaAtual").focus();
+            });
+            document.getElementById("cancelarSenha").addEventListener("click", fecharTrocaSenha);
+            document.getElementById("senhaForm").addEventListener("submit", enviarTrocaSenha);
+            void iniciarAcesso();
         });
 
-// O SQLite é a fonte dos registros e das configurações.
+        function mostrarEntrada(paraCadastro) {
+            cadastroInicial = paraCadastro;
+            document.getElementById("appView").hidden = true;
+            document.getElementById("authView").hidden = false;
+            document.getElementById("authTitle").textContent = paraCadastro ? "Crie sua conta." : "Entre na sua conta.";
+            document.getElementById("authDescription").textContent = paraCadastro
+                ? "Configure seu acesso pessoal para registrar sua jornada."
+                : "Acesse seus registros de jornada.";
+            document.getElementById("authSubmit").textContent = paraCadastro ? "Criar conta" : "Entrar";
+            document.getElementById("confirmarSenhaCampo").hidden = !paraCadastro;
+            document.getElementById("authConfirmarSenha").required = paraCadastro;
+            document.getElementById("authSenha").autocomplete = paraCadastro ? "new-password" : "current-password";
+            document.getElementById("authUsuario").autocomplete = paraCadastro ? "username" : "username";
+            document.getElementById("authSenha").value = "";
+            document.getElementById("authConfirmarSenha").value = "";
+        }
+
+        function limparSessao() {
+            usuarioLogado = null;
+            csrfToken = null;
+            pontoServidorPronto = false;
+            registros = {};
+            configuracoes = { nome: "", jornada: "08:00", inicioSemana: "1" };
+            document.getElementById("btnBaterPonto").disabled = true;
+            document.getElementById("senhaModal").style.display = "none";
+            document.getElementById("modalExtra").style.display = "none";
+            document.getElementById("modalEdicao").style.display = "none";
+            document.getElementById("usuarioAtual").textContent = "";
+            document.getElementById("nomeFuncionario").value = "";
+            document.getElementById("appView").hidden = true;
+            // Limpa dados exibidos em uma sessão anterior no navegador compartilhado.
+            atualizarTela();
+        }
+
+        async function iniciarAcesso() {
+            try {
+                const sessao = await fetch("/api/auth/me", { credentials: "same-origin", cache: "no-store" });
+                if (sessao.ok) {
+                    await entrarNaConta(await sessao.json());
+                    return;
+                }
+                if (sessao.status !== 401) throw new Error("Não foi possível validar a sessão.");
+                const status = await fetch("/api/auth/status", { cache: "no-store" });
+                if (!status.ok) throw new Error("Não foi possível consultar o cadastro.");
+                const dados = await status.json();
+                mostrarEntrada(!!dados.cadastroDisponivel);
+            } catch (erro) {
+                limparSessao();
+                mostrarEntrada(false);
+                document.getElementById("authError").textContent =
+                    "Servidor indisponível. Inicie o backend e atualize a página.";
+                console.error("Erro ao acessar o servidor:", erro);
+            }
+        }
+
+        async function entrarNaConta(dados) {
+            usuarioLogado = dados.usuario;
+            csrfToken = dados.csrfToken;
+            document.getElementById("usuarioAtual").textContent = usuarioLogado;
+            document.getElementById("authError").textContent = "";
+            document.getElementById("authView").hidden = true;
+            document.getElementById("appView").hidden = false;
+            await carregarDadosIniciais();
+        }
+
+        async function enviarAutenticacao(evento) {
+            evento.preventDefault();
+            const erro = document.getElementById("authError");
+            const botao = document.getElementById("authSubmit");
+            erro.textContent = "";
+            const usuario = document.getElementById("authUsuario").value.trim().toLowerCase();
+            const senha = document.getElementById("authSenha").value;
+            const confirmarSenha = document.getElementById("authConfirmarSenha").value;
+            if (cadastroInicial && senha !== confirmarSenha) {
+                erro.textContent = "As senhas não coincidem.";
+                return;
+            }
+            botao.disabled = true;
+            try {
+                const resposta = await fetch(cadastroInicial ? "/api/auth/register" : "/api/auth/login", {
+                    method: "POST", credentials: "same-origin", cache: "no-store",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ usuario, senha, ...(cadastroInicial ? { confirmarSenha } : {}) })
+                });
+                const dados = await resposta.json().catch(() => ({}));
+                if (!resposta.ok) {
+                    if (resposta.status === 409 && cadastroInicial) mostrarEntrada(false);
+                    throw new Error(dados.erro || "Não foi possível acessar a conta.");
+                }
+                document.getElementById("authSenha").value = "";
+                document.getElementById("authConfirmarSenha").value = "";
+                await entrarNaConta(dados);
+            } catch (falha) {
+                erro.textContent = falha.message || "Verifique sua conexão e tente novamente.";
+            } finally {
+                botao.disabled = false;
+            }
+        }
+
+        async function sairConta() {
+            try {
+                await requisitarAPI("/api/auth/logout", { method: "POST" });
+                limparSessao();
+                mostrarEntrada(false);
+            } catch (erro) {
+                mostrarMensagem(erro.message || "Não foi possível encerrar a sessão.");
+            }
+        }
+
+        function fecharTrocaSenha() {
+            document.getElementById("senhaModal").style.display = "none";
+            document.getElementById("senhaForm").reset();
+            document.getElementById("senhaError").textContent = "";
+        }
+
+        async function enviarTrocaSenha(evento) {
+            evento.preventDefault();
+            const botao = document.getElementById("salvarSenha");
+            const erro = document.getElementById("senhaError");
+            erro.textContent = "";
+            botao.disabled = true;
+            try {
+                await requisitarAPI("/api/auth/password", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        senhaAtual: document.getElementById("senhaAtual").value,
+                        novaSenha: document.getElementById("senhaNova").value
+                    })
+                });
+                limparSessao();
+                mostrarEntrada(false);
+                document.getElementById("authDescription").textContent =
+                    "Senha atualizada. Entre novamente com sua nova senha.";
+            } catch (falha) {
+                erro.textContent = falha.message || "Não foi possível trocar a senha.";
+            } finally {
+                botao.disabled = false;
+            }
+        }
+
+        // O SQLite é a fonte dos registros e das configurações.
         async function requisitarAPI(caminho, opcoes = {}) {
-            const resposta = await fetch(caminho, opcoes);
-            const metodo = opcoes.method || "GET";
-            if (resposta.status === 404 && (metodo === "DELETE" || (metodo === "GET" && caminho.startsWith("/api/registros/")))) {
+            const metodo = (opcoes.method || "GET").toUpperCase();
+            const headers = { ...(opcoes.headers || {}) };
+            if (metodo !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+            const resposta = await fetch(caminho, {
+                ...opcoes, headers, credentials: "same-origin", cache: "no-store"
+            });
+            if (resposta.status === 401) {
+                limparSessao();
+                mostrarEntrada(false);
+                throw new Error("Sessão encerrada. Entre novamente.");
+            }
+            if (resposta.status === 404 && (metodo === "DELETE" ||
+                (metodo === "GET" && caminho.startsWith("/api/registros/")))) {
                 return null;
             }
             if (!resposta.ok) {
@@ -33,7 +194,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             return resposta.status === 204 ? null : resposta.json();
         }
 
-        function requisitarRegistro(data, opcoes = {}) {
+                function requisitarRegistro(data, opcoes = {}) {
             return requisitarAPI(`/api/registros/${data}`, opcoes);
         }
 
