@@ -116,12 +116,12 @@ npm run test:cloud
 npm --prefix backend test
 npm run build
 # Faça commit antes de publicar, para identificar precisamente a revisão.
-vercel deploy --scope ze17
+vercel deploy --target preview --scope ze17
 vercel inspect https://URL-EXATA --scope ze17
 vercel curl /api/health --deployment https://URL-EXATA --scope ze17
 ```
 
-Aguarde **READY**. Não use `--prod` para Preview. Pushes de branches também podem gerar previews pela integração Git. Confirme commit e branch no deployment. Mantenha a branch de produção em `main` e não faça merge sem aprovação.
+Aguarde **READY**. Use `--target preview` explicitamente; a CLI pode atribuir o primeiro deployment de um projeto a Production quando o destino não é especificado. Não use `--prod` para Preview. Pushes de branches também podem gerar previews pela integração Git. Confirme commit e branch no deployment. Mantenha a branch de produção em `main` e não faça merge sem aprovação.
 
 Valide frontend, cadastro inicial/segundo cadastro, login, logout, CSRF, mudança de senha, registros em `HH:mm`, edição, extras, exclusão, histórico com filtro de mês, configurações, download CSV e JSON, restauração e persistência após recarregar e redeploy. Uma requisição sem autenticação Vercel deve receber a proteção, inclusive em `/api/health`. Consulte os logs para erros inesperados. Testes libSQL locais não comprovam o transporte remoto nem o roteamento; registre essas evidências separadamente.
 
@@ -146,6 +146,6 @@ Erros retornam mensagens genéricas e os logs remotos não imprimem objetos de t
 - [ ] Conferir conta e registros após redeploy; testar backup e recuperação com dados fictícios.
 - [ ] Manter a demonstração sem dados pessoais reais e monitorar limites gratuitos.
 
-Não existe banco de produção criado por este fluxo de Preview. Merge e produção são etapas posteriores sujeitas à autorização.
+Não existe banco de produção criado por este fluxo de Preview. O destino Production está pausado após a atribuição automática do primeiro deployment pela CLI; consulte [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md). Merge, credenciais Production e reativação de produção são etapas posteriores sujeitas à autorização.
 
 Referências: [Vite na Vercel](https://vercel.com/docs/frameworks/frontend/vite), [Functions Node.js](https://vercel.com/docs/functions/runtimes/node-js), [rewrites](https://vercel.com/docs/rewrites), [Turso](https://docs.turso.tech/quickstart), [transações libSQL](https://tursodatabase.github.io/libsql-client-ts/interfaces/Client.html).

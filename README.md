@@ -163,7 +163,7 @@ As rotas de dados exigem sessão autenticada. As operações de escrita exigem t
 
 ## Hospedagem com Vercel e Turso
 
-O projeto oferece uma implantação com **frontend Vite na Vercel, API Express serverless e banco Turso libSQL remoto**. O backend SQLite local permanece disponível, sem mudanças no fluxo de desenvolvimento. Consulte **[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md)** para instalar, testar e configurar a hospedagem.
+O projeto oferece uma implantação com **frontend Vite na Vercel, API Express serverless e banco Turso libSQL remoto**. O backend SQLite local permanece disponível, sem mudanças no fluxo de desenvolvimento. Consulte **[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md)** para instalar, testar e configurar a hospedagem e **[VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md)** para os resultados realmente executados.
 
 O Preview exige **Vercel Authentication / Standard Protection** antes do cadastro inicial e usa o banco separado `meu-ponto-pi2-preview`. Não associe previews ao banco de produção. A publicação em produção e o merge dependem de aprovação expressa. Consulte o guia para variáveis, atualizações, backups e checklist de produção.
 
