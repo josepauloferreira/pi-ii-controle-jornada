@@ -11,6 +11,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
         let cadastroInicial = false;
 
         document.addEventListener("DOMContentLoaded", () => {
+            configurarCampos24Horas();
             configurarMesAtual();
             atualizarRelogio();
             window.setInterval(atualizarRelogio, 1000);
@@ -349,6 +350,19 @@ const STORAGE_PONTO = "meu_ponto_registros";
             return resultado;
         }
 
+        // O seletor nativo de hora pode mostrar AM/PM conforme o navegador.
+        // Os campos de texto mantêm a entrada em HH:mm de 24 horas em qualquer idioma.
+        function configurarCampos24Horas() {
+            document.querySelectorAll('[data-formato-horario="24h"]').forEach(campo => {
+                campo.addEventListener("input", () => {
+                    // Permite usar teclado numérico: 0830 passa a 08:30.
+                    if (/^\d{4}$/.test(campo.value)) {
+                        campo.value = `${campo.value.slice(0, 2)}:${campo.value.slice(2)}`;
+                    }
+                });
+            });
+        }
+
         function horarioValido(valor) {
             return typeof valor === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(valor);
         }
@@ -367,7 +381,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             const agora = new Date();
             const relogio = document.getElementById("relogio");
             const dataAtual = document.getElementById("dataAtual");
-            if (relogio) relogio.textContent = agora.toLocaleTimeString("pt-BR");
+            if (relogio) relogio.textContent = agora.toLocaleTimeString("pt-BR", { hour12: false });
             if (dataAtual) dataAtual.textContent = agora.toLocaleDateString("pt-BR", {
                 weekday: "long", day: "2-digit", month: "long", year: "numeric"
             });
