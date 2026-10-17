@@ -2,140 +2,166 @@
 
 Projeto Integrador em Computação II — UNIVESP (2026).
 
-Aplicação web para registrar e acompanhar a jornada de trabalho em home office.
+Aplicação web para registrar e acompanhar a jornada de trabalho em home office. Trata-se de um **protótipo acadêmico de uso individual**, com interface responsiva, API Express e persistência em SQLite.
 
-## Roadmap
+## Estado do projeto e roadmap
+
+As entregas planejadas para o software foram integradas à branch `main`:
 
 - [x] [1. Organizar o frontend com Vite — #13](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/13)
 - [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
 - [x] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
 - [x] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
-- [x] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
-- [ ] [6. Cadastro e login de conta única — #22](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/22)
+- [x] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18) ([PR #23](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/23))
+- [x] [6. Cadastro e login de conta única — #22](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/22) ([PR #24](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/24))
+- [x] Padronizar os campos de horário em 24 horas ([PR #25](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/25))
 
-A etapa 5 foi integrada à `main` pelo PR #23. A etapa 6 permanece na branch de autenticação até revisão e merge.
+A implementação concluída no repositório **não significa homologação como sistema oficial de controle de ponto**, nem substitui a validação externa e as entregas acadêmicas.
 
-**Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
+## Funcionalidades
 
-**Nesta branch:** autenticação de conta única sobre a interface Apple Light já integrada à `main`. A issue #22 permanece aberta até aprovação do PR.
+- Registrar entrada, saída para almoço, retorno e saída do expediente.
+- Consultar horas trabalhadas, jornada prevista e saldo diário. Enquanto o expediente está incompleto, o saldo mostra **"Em andamento"**.
+- Consultar o histórico por mês, editar ou excluir registros e gerenciar batidas extras.
+- Configurar nome de exibição, jornada diária e início da semana.
+- Exportar histórico em CSV, baixar backup JSON e restaurar dados mediante confirmação.
+- Criar uma única conta pessoal, entrar, sair e trocar a própria senha.
 
-
-## O que o sistema faz
-
-- Registra entrada, saída para almoço, retorno e saída.
-- Mostra horas trabalhadas, jornada prevista e saldo do dia.
-- Permite consultar, editar e excluir registros, inclusive batidas extras.
-- Salva as configurações da jornada.
-- Exporta histórico em CSV e faz backup em JSON.
-
-O saldo só aparece depois que a jornada é concluída. Antes disso, mostra **"Em andamento"**.
+**Horários em 24 horas:** os campos de configuração, edição de registros e batidas extras usam `HH:mm`, sem AM/PM (por exemplo, `08:30` e `18:30`). É possível digitar `1830`; o campo converte para `18:30`. Valores fora de `00:00` a `23:59` são inválidos. O relógio também é exibido em 24 horas. A gravação dos horários continua usando o formato `HH:mm` no SQLite.
 
 ## Tecnologias
 
-- **Interface:** HTML, CSS e JavaScript com Vite, integrados à API Express.
-- **Servidor:** Node.js + Express.
-- **Banco de dados:** SQLite.
+- **Frontend:** HTML, CSS, JavaScript puro e Vite (sem React).
+- **Backend:** Node.js e Express.
+- **Persistência:** SQLite com `better-sqlite3`.
+- **Autenticação:** conta única, hash de senha `scrypt`, sessões no SQLite e cookie de sessão.
 
-## Cadastro e login
+**Requisito:** Node.js 22.12 ou superior e npm. Para os comandos abaixo, use um terminal na **raiz do repositório**.
 
-No primeiro acesso, a tela oferece **Criar conta**. Defina o nome de usuário e uma senha com pelo menos 12 caracteres. **Não há usuário nem senha padrão** e não é necessário executar nenhum comando de criação de administrador.
+## Instalação e execução
 
-Depois que a primeira conta é criada, o servidor **impede novos cadastros**, e a tela passa a oferecer somente **Entrar**. Existe apenas uma conta para controlar seus próprios registros; não há administrador nem painel de funcionários. O titular pode sair e trocar a própria senha nas opções da interface.
+### 1. Instalar dependências
 
-- As credenciais ficam no SQLite, com senha protegida por hash `scrypt` e salt aleatório.
-- As sessões ficam no servidor; o navegador guarda um cookie `HttpOnly`, `SameSite=Strict` e `Secure` quando conectado por HTTPS.
-- Registros, configurações e restauração de backups exigem sessão autenticada; alterações também exigem confirmação de segurança da sessão.
-- A conta é criada no banco existente, **sem apagar registros anteriores** ou transferi-los para outra tabela. Antes dos testes, guarde um backup do arquivo `backend/dados/jornada.db`.
+O frontend e o backend têm `package.json` separados. Instale ambos:
 
-**Atenção:** quem acessar o primeiro cadastro pode criar a única conta. Para a configuração inicial, mantenha as portas do Codespaces como **Private** e não publique a aplicação. Este é um projeto acadêmico, não um serviço pronto para uso com dados pessoais sensíveis.
-
-### Testes automatizados
-
-No diretório `backend`, depois de `npm install`:
-
-```bash
-npm test
-```
-
-Os testes usam um SQLite temporário, sem alterar seu banco de registros.
-
-## Como executar o frontend com Vite
-
-No Codespaces, abra um terminal **na raiz do repositório**:
-
-```bash
+~~~bash
 npm install
+npm --prefix backend install
+~~~
+
+### 2. Iniciar frontend e backend com um comando (Linux / Codespaces)
+
+~~~bash
+node backend/server.js & BACKEND_PID=$!; trap 'kill "$BACKEND_PID" 2>/dev/null' EXIT; npm run dev
+~~~
+
+Este comando inicia o **Express na porta 3000** e o **Vite na porta 5173** na mesma sessão de terminal Bash/zsh. Para encerrar, pressione `Ctrl+C`. Abra a interface em **http://localhost:5173**.
+
+O Vite encaminha as chamadas `/api` para `http://127.0.0.1:3000`. O endereço da porta **3000** apresenta a demonstração legada (`backend/demo.html`), **não** a interface principal com tela de autenticação.
+
+No **GitHub Codespaces**, abra a aplicação pela porta **5173** e mantenha as portas **5173 e 3000 como Private**, especialmente antes de criar a primeira conta.
+
+### Alternativa: dois terminais
+
+Na raiz do repositório, execute em terminais diferentes:
+
+**Terminal 1 — backend**
+~~~bash
+npm --prefix backend start
+~~~
+
+**Terminal 2 — frontend**
+~~~bash
 npm run dev
-```
+~~~
 
-Abra a porta **5173** na aba **Ports (Portas)**, mantendo a visibilidade como **Private**.
+> A aplicação precisa dos dois servidores para consultar e salvar registros. Não é necessário publicar a porta do backend.
 
-**Para bater ponto, também é necessário iniciar o backend Express na porta 3000** (veja abaixo). O Vite encaminha automaticamente chamadas `/api` para o Express, sem necessidade de publicar a porta 3000.
+## Cadastro inicial, login e segurança
 
-Depois de entrar na conta, os **registros de todos os dias** e as **configurações de jornada** são carregados e salvos no SQLite. O histórico local antigo fica preservado no navegador.
+No primeiro acesso, aparece **Criar conta**. Escolha um nome de usuário e uma senha de pelo menos **12 caracteres**; não há senha ou usuário predefinidos. Após a criação da primeira conta, o backend bloqueia novos cadastros e a tela passa a oferecer somente **Entrar**.
 
-Se houver datas locais ausentes no banco, a interface oferece copiar **apenas os dias que ainda não existem** no SQLite; nunca sobrescreve registros do servidor automaticamente. O botão **Baixar backup dos dados antigos do navegador** permite salvar a cópia local separadamente. Se houver divergências, o banco continua sendo a fonte principal.
+A conta é pessoal e única: **não existe painel de administradores, múltiplos funcionários ou recuperação pública de senha**. Após entrar, é possível sair ou alterar a senha. A alteração invalida sessões anteriores.
 
-**Fazer backup** exporta o estado atual do SQLite para JSON. **Restaurar backup** substitui os registros do SQLite (e as configurações, quando presentes no arquivo), mediante confirmação. A restauração é transacional: backups inválidos são rejeitados sem alterar os dados existentes. **Exportar CSV** utiliza o histórico atual do banco.
+- Senhas são armazenadas como hash `scrypt` com salt aleatório, não em texto simples.
+- As sessões ficam no SQLite; o navegador recebe cookie `HttpOnly` e `SameSite=Strict`, com `Secure` quando a requisição chega por HTTPS.
+- Histórico, registros, configurações e restauração de backups exigem login. Operações de escrita também verificam o token CSRF da sessão.
+- Há limitação de tentativas de login.
 
-Dados armazenados em outras origens do navegador não são compartilhados automaticamente; transfira-os por meio de um arquivo de backup JSON, se necessário.
+**Importante:** quem primeiro acessar uma instância ainda sem conta pode registrar a conta única. **Não publique uma instalação vazia**. Este protótipo não deve ser tratado como serviço pronto para dados pessoais sensíveis.
 
-## Como executar o backend com SQLite
+## Banco de dados, histórico antigo e backups
 
-No Codespaces, em outro terminal, partindo da raiz do repositório:
+O arquivo padrão é `backend/dados/jornada.db`, criado automaticamente pelo backend. A pasta `backend/dados/` está no `.gitignore` e **não é enviada ao GitHub**. Excluir o ambiente onde o backend roda pode significar perder seus dados; mantenha backups fora desse ambiente.
 
-```bash
-cd backend
-npm install
-npm start
-```
+O cadastro da conta **não apaga nem transfere os registros anteriores** das tabelas de jornada. As tabelas de conta e sessões são adicionais.
 
-Na aba **Ports**, mantenha a porta **3000** como **Private**. A interface Vite continua acessível pela porta **5173**.
+- O SQLite é a fonte principal dos registros e das configurações.
+- Registros antigos no `localStorage` continuam preservados no navegador. Se houver dias locais ausentes no SQLite, a interface oferece migração **opcional** somente dessas datas, sem substituir registros já existentes no servidor.
+- É possível baixar separadamente os dados antigos do navegador. Dados de origens diferentes (como outro navegador ou endereço) não são migrados automaticamente.
+- **Fazer backup** gera JSON dos dados atuais do SQLite; **Exportar CSV** usa o histórico persistido.
+- **Restaurar backup** substitui todos os registros do SQLite e, se houver configurações no arquivo, também as configurações, mediante confirmação. A operação é transacional, e arquivos inválidos são rejeitados sem substituir os dados.
 
-Use a porta 5173 para a interface com login. A demonstração antiga na porta 3000 não possui a nova tela de autenticação.
+Antes de realizar testes manuais que envolvam criação de conta, troca de senha ou restauração, faça uma cópia do banco existente ou utilize uma base de testes. Para executar o backend com outra base, defina `MEU_PONTO_DB_PATH` apontando para um arquivo SQLite em uma pasta existente.
 
-Para parar o servidor, pressione `Ctrl+C` no terminal.
+## Testes e verificação
 
-**Requisito:** Node.js 22.12 ou superior para usar o Vite e o backend.
+Na raiz do repositório, depois de instalar as dependências:
 
-## Arquivos principais
+~~~bash
+npm --prefix backend test
+npm run build
+~~~
 
-- `index.html`: página principal do frontend Vite.
-- `src/style.css`: estilos da interface.
-- `src/main.js`: funcionalidades do frontend.
-- `Projeto-PI-Ponto.html`: versão inicial, que salva os dados no navegador.
-- `backend/demo.html`: demonstração da interface conectada ao banco de dados.
-- `backend/server.js`: servidor Express e endereços da API.
-- `backend/auth.js`: cadastro inicial, login, sessões e troca de senha.
-- `backend/auth.test.js`: testes automatizados da autenticação.
-- `backend/database.js`: criação das tabelas SQLite.
-- `backend/dados/jornada.db`: banco criado automaticamente quando o servidor inicia.
+O teste automatizado do backend usa um **SQLite temporário**, sem modificar `backend/dados/jornada.db`. Ele cobre cadastro concorrente de conta única, login, autorização de rotas, CSRF, preservação de registro antigo, troca de senha, logout e limite de tentativas.
 
-**Atenção:** o arquivo `jornada.db` fica apenas no ambiente onde o backend está rodando, não é enviado ao GitHub. Se o Codespace for excluído, esses dados também poderão ser perdidos. Guarde cópias dos dados de que precisar.
+O build do frontend usa `vite build` e gera a pasta `dist/`, ignorada pelo Git. Os testes automatizados e o build foram executados e aprovados durante a integração da autenticação. **Não há workflow de CI configurado no repositório**; novas alterações precisam ser verificadas novamente.
+
+A versão com horários de 24 horas exige também conferência visual nos navegadores utilizados, incluindo digitação de `1830` → `18:30`, edição de batidas e login.
+
+## Estrutura principal
+
+~~~text
+.
+├── index.html                # Interface atual do Vite
+├── src/
+│   ├── main.js               # Fluxos de interface e chamadas à API
+│   └── style.css             # Estilos e responsividade
+├── vite.config.js            # Proxy /api → backend
+├── package.json              # Frontend
+├── backend/
+│   ├── server.js             # Servidor Express e rotas da API
+│   ├── auth.js               # Cadastro, login e sessões
+│   ├── auth.test.js          # Teste de integração da autenticação
+│   ├── database.js           # Tabelas do SQLite
+│   ├── demo.html             # Demonstração antiga
+│   └── package.json          # Backend
+└── Projeto-PI-Ponto.html     # Protótipo original com armazenamento local
+~~~
 
 ## Endereços da API
 
-| Método | Endereço | Para quê? |
+| Método | Rota | Descrição |
 | --- | --- | --- |
-| GET | `/api/health` | Verificar se o servidor está funcionando |
-| GET | `/api/auth/status` | Verificar se o cadastro inicial está disponível |
-| POST | `/api/auth/register` | Criar a única conta, apenas na primeira vez |
-| POST | `/api/auth/login` | Entrar na conta |
-| GET | `/api/auth/me` | Consultar a sessão atual |
+| GET | `/api/health` | Estado básico do servidor |
+| GET | `/api/auth/status` | Verificar disponibilidade do cadastro inicial |
+| POST | `/api/auth/register` | Criar a conta única na primeira visita |
+| POST | `/api/auth/login` | Entrar |
+| GET | `/api/auth/me` | Consultar a sessão |
 | POST | `/api/auth/logout` | Encerrar a sessão |
-| POST | `/api/auth/password` | Trocar a senha atual |
-| GET | `/api/registros` | Consultar todos os dias registrados |
-| GET | `/api/registros/:data` | Consultar um dia (ex.: 2026-10-15) |
+| POST | `/api/auth/password` | Alterar senha da conta |
+| GET | `/api/registros` | Listar registros (aceita filtro `?mes=AAAA-MM`) |
+| GET | `/api/registros/:data` | Consultar um dia (`AAAA-MM-DD`) |
 | PUT | `/api/registros/:data` | Criar ou atualizar um dia |
 | DELETE | `/api/registros/:data` | Excluir um dia |
 | GET | `/api/configuracoes` | Consultar configurações |
-| PUT | `/api/configuracoes` | Salvar configurações |
-| PUT | `/api/backup` | Restaurar todos os registros e configurações (transação) |
+| PUT | `/api/configuracoes` | Atualizar configurações |
+| PUT | `/api/backup` | Restaurar registros e configurações |
 
-As rotas de registros e configurações agora exigem autenticação. A restauração de backup utiliza `PUT /api/backup` com confirmação pela interface.
+As rotas de dados exigem sessão autenticada. As operações de escrita exigem também confirmação CSRF.
 
-**Observação:** a versão inicial em `Projeto-PI-Ponto.html` e a demonstração integrada não compartilham dados automaticamente. O projeto é acadêmico e ainda não foi validado como sistema oficial de ponto.
+## Colaboração e limitações
 
-## Como contribuir
+Para contribuir, escolha uma [issue](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues), trabalhe em branch própria e abra um Pull Request para revisão, em vez de editar a `main` diretamente.
 
-Veja as tarefas do grupo na aba [Issues](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues). Avise qual tarefa fará e trabalhe em uma branch separada, sem modificar diretamente a `main`. Ao terminar, abra um Pull Request para o grupo revisar.
+Este projeto é uma **demonstração acadêmica voltada ao uso individual**, não um produto homologado para controle legal de ponto. A implantação em hospedagem permanente, a validação externa com a comunidade e as evidências para o Relatório Final devem ser tratadas separadamente; **não são resultados já comprovados pelo código**.
