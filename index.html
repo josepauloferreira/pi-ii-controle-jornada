@@ -200,7 +200,7 @@
                 <div>
                     <label for="jornadaDiaria">Horas por dia</label>
 
-                    <input type="time" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()">
+                    <input type="text" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Use horário de 24 horas: 08:30 ou 1830" data-formato-horario="24h">
                 </div>
 
                 <div>
@@ -249,7 +249,7 @@
 
                 <label for="horarioExtra">Horário</label>
 
-                <input type="time" id="horarioExtra">
+                <input type="text" id="horarioExtra" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Use horário de 24 horas: 08:30 ou 1830" data-formato-horario="24h">
 
             </div>
 
@@ -292,7 +292,7 @@
 
                 <label for="editEntrada">Entrada</label>
 
-                <input type="time" id="editEntrada">
+                <input type="text" id="editEntrada" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Use horário de 24 horas: 08:30 ou 1830" data-formato-horario="24h">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('entrada')">Excluir esta batida</button>
 
             </div>
@@ -301,7 +301,7 @@
 
                 <label for="editSaidaAlmoco">Saída almoço</label>
 
-                <input type="time" id="editSaidaAlmoco">
+                <input type="text" id="editSaidaAlmoco" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Use horário de 24 horas: 08:30 ou 1830" data-formato-horario="24h">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saidaAlmoco')">Excluir esta batida</button>
 
             </div>
@@ -310,7 +310,7 @@
 
                 <label for="editRetorno">Retorno almoço</label>
 
-                <input type="time" id="editRetorno">
+                <input type="text" id="editRetorno" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Use horário de 24 horas: 08:30 ou 1830" data-formato-horario="24h">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('retornoAlmoco')">Excluir esta batida</button>
 
             </div>
@@ -319,7 +319,7 @@
 
                 <label for="editSaida">Saída</label>
 
-                <input type="time" id="editSaida">
+                <input type="text" id="editSaida" inputmode="numeric" maxlength="5" pattern="(?:[01][0-9]|2[0-3]):[0-5][0-9]" placeholder="HH:mm" title="Use horário de 24 horas: 08:30 ou 1830" data-formato-horario="24h">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saida')">Excluir esta batida</button>
 
             </div>
