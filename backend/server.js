@@ -1,12 +1,20 @@
 const express = require("express");
 const path = require("node:path");
 const db = require("./database");
+const { configureAuth } = require("./auth");
 
 const app = express();
 const porta = Number(process.env.PORT) || 3000;
 const campos = ["entrada", "saidaAlmoco", "retornoAlmoco", "saida"];
 
+app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
+app.use("/api", (_req, res, next) => {
+  res.set("Cache-Control", "no-store");
+  res.set("X-Content-Type-Options", "nosniff");
+  next();
+});
+const { requireAuth, requireCsrf } = configureAuth(app, db);
 
 function dataValida(data) {
   if (typeof data !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(data)) return false;
@@ -64,6 +72,15 @@ app.get("/", (req, res) => {
 
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok" });
+});
+
+// Os dados de ponto exigem login e confirmação nas operações de escrita.
+app.use("/api", requireAuth);
+app.use("/api", (req, res, next) => {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    return requireCsrf(req, res, next);
+  }
+  next();
 });
 
 app.get("/api/registros", (req, res) => {
@@ -189,6 +206,9 @@ app.use((erro, req, res, next) => {
   res.status(500).json({ erro: "Erro interno no servidor." });
 });
 
-app.listen(porta, "127.0.0.1", () => {
-  console.log(`Backend iniciado em http://localhost:${porta}`);
-});
+if (require.main === module) {
+  app.listen(porta, "127.0.0.1", () => {
+    console.log(`Backend iniciado em http://localhost:${porta}`);
+  });
+}
+module.exports = app;

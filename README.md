@@ -10,13 +10,14 @@ Aplicação web para registrar e acompanhar a jornada de trabalho em home office
 - [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
 - [x] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
 - [x] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
-- [ ] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
+- [x] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
+- [ ] [6. Cadastro e login de conta única — #22](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/22)
 
-As etapas 1 e 2 podem ser desenvolvidas em paralelo. A etapa 3 depende das duas primeiras, e a etapa 4 depende da terceira.
+A etapa 5 foi integrada à `main` pelo PR #23. A etapa 6 permanece na branch de autenticação até revisão e merge.
 
 **Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
 
-**Concluído nesta branch:** histórico, configurações, exportação e restauração com SQLite (#16). **Pendente:** refinamento visual (#18).
+**Nesta branch:** autenticação de conta única sobre a interface Apple Light já integrada à `main`. A issue #22 permanece aberta até aprovação do PR.
 
 
 ## O que o sistema faz
@@ -35,6 +36,29 @@ O saldo só aparece depois que a jornada é concluída. Antes disso, mostra **"E
 - **Servidor:** Node.js + Express.
 - **Banco de dados:** SQLite.
 
+## Cadastro e login
+
+No primeiro acesso, a tela oferece **Criar conta**. Defina o nome de usuário e uma senha com pelo menos 12 caracteres. **Não há usuário nem senha padrão** e não é necessário executar nenhum comando de criação de administrador.
+
+Depois que a primeira conta é criada, o servidor **impede novos cadastros**, e a tela passa a oferecer somente **Entrar**. Existe apenas uma conta para controlar seus próprios registros; não há administrador nem painel de funcionários. O titular pode sair e trocar a própria senha nas opções da interface.
+
+- As credenciais ficam no SQLite, com senha protegida por hash `scrypt` e salt aleatório.
+- As sessões ficam no servidor; o navegador guarda um cookie `HttpOnly`, `SameSite=Strict` e `Secure` quando conectado por HTTPS.
+- Registros, configurações e restauração de backups exigem sessão autenticada; alterações também exigem confirmação de segurança da sessão.
+- A conta é criada no banco existente, **sem apagar registros anteriores** ou transferi-los para outra tabela. Antes dos testes, guarde um backup do arquivo `backend/dados/jornada.db`.
+
+**Atenção:** quem acessar o primeiro cadastro pode criar a única conta. Para a configuração inicial, mantenha as portas do Codespaces como **Private** e não publique a aplicação. Este é um projeto acadêmico, não um serviço pronto para uso com dados pessoais sensíveis.
+
+### Testes automatizados
+
+No diretório `backend`, depois de `npm install`:
+
+```bash
+npm test
+```
+
+Os testes usam um SQLite temporário, sem alterar seu banco de registros.
+
 ## Como executar o frontend com Vite
 
 No Codespaces, abra um terminal **na raiz do repositório**:
@@ -48,7 +72,7 @@ Abra a porta **5173** na aba **Ports (Portas)**, mantendo a visibilidade como **
 
 **Para bater ponto, também é necessário iniciar o backend Express na porta 3000** (veja abaixo). O Vite encaminha automaticamente chamadas `/api` para o Express, sem necessidade de publicar a porta 3000.
 
-Os **registros de todos os dias** e as **configurações de jornada** são carregados e salvos no SQLite. O histórico local antigo fica preservado no navegador.
+Depois de entrar na conta, os **registros de todos os dias** e as **configurações de jornada** são carregados e salvos no SQLite. O histórico local antigo fica preservado no navegador.
 
 Se houver datas locais ausentes no banco, a interface oferece copiar **apenas os dias que ainda não existem** no SQLite; nunca sobrescreve registros do servidor automaticamente. O botão **Baixar backup dos dados antigos do navegador** permite salvar a cópia local separadamente. Se houver divergências, o banco continua sendo a fonte principal.
 
@@ -68,7 +92,7 @@ npm start
 
 Na aba **Ports**, mantenha a porta **3000** como **Private**. A interface Vite continua acessível pela porta **5173**.
 
-A porta 3000 também abre a demonstração antiga em `backend/demo.html`, mas use a porta 5173 para testar o frontend Vite integrado.
+Use a porta 5173 para a interface com login. A demonstração antiga na porta 3000 não possui a nova tela de autenticação.
 
 Para parar o servidor, pressione `Ctrl+C` no terminal.
 
@@ -82,6 +106,8 @@ Para parar o servidor, pressione `Ctrl+C` no terminal.
 - `Projeto-PI-Ponto.html`: versão inicial, que salva os dados no navegador.
 - `backend/demo.html`: demonstração da interface conectada ao banco de dados.
 - `backend/server.js`: servidor Express e endereços da API.
+- `backend/auth.js`: cadastro inicial, login, sessões e troca de senha.
+- `backend/auth.test.js`: testes automatizados da autenticação.
 - `backend/database.js`: criação das tabelas SQLite.
 - `backend/dados/jornada.db`: banco criado automaticamente quando o servidor inicia.
 
@@ -92,6 +118,12 @@ Para parar o servidor, pressione `Ctrl+C` no terminal.
 | Método | Endereço | Para quê? |
 | --- | --- | --- |
 | GET | `/api/health` | Verificar se o servidor está funcionando |
+| GET | `/api/auth/status` | Verificar se o cadastro inicial está disponível |
+| POST | `/api/auth/register` | Criar a única conta, apenas na primeira vez |
+| POST | `/api/auth/login` | Entrar na conta |
+| GET | `/api/auth/me` | Consultar a sessão atual |
+| POST | `/api/auth/logout` | Encerrar a sessão |
+| POST | `/api/auth/password` | Trocar a senha atual |
 | GET | `/api/registros` | Consultar todos os dias registrados |
 | GET | `/api/registros/:data` | Consultar um dia (ex.: 2026-10-15) |
 | PUT | `/api/registros/:data` | Criar ou atualizar um dia |
@@ -100,7 +132,7 @@ Para parar o servidor, pressione `Ctrl+C` no terminal.
 | PUT | `/api/configuracoes` | Salvar configurações |
 | PUT | `/api/backup` | Restaurar todos os registros e configurações (transação) |
 
-Exemplo: com o servidor iniciado, acesse `http://localhost:3000/api/registros` no Codespaces para visualizar os registros em JSON. A restauração de backup utiliza `PUT /api/backup` com confirmação pela interface.
+As rotas de registros e configurações agora exigem autenticação. A restauração de backup utiliza `PUT /api/backup` com confirmação pela interface.
 
 **Observação:** a versão inicial em `Projeto-PI-Ponto.html` e a demonstração integrada não compartilham dados automaticamente. O projeto é acadêmico e ainda não foi validado como sistema oficial de ponto.
 
