@@ -86,10 +86,7 @@ jobs:
           npm --prefix backend ci
 
       - name: Instalar Playwright isolado para testes
-        run: npm --prefix e2e install --no-audit --no-fund
-
-      - name: Preparar lockfile E2E para versionamento
-        run: node -e 'const fs=require("node:fs"); console.log("LOCK_BEGIN"+fs.readFileSync("e2e/package-lock.json").toString("base64")+"LOCK_END");'
+        run: npm --prefix e2e ci --no-audit --no-fund
 
       - name: Instalar Chromium e dependências do sistema
         run: ./e2e/node_modules/.bin/playwright install --with-deps chromium
