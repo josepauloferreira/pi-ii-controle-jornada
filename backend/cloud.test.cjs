@@ -100,3 +100,98 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
     fs.rmSync(folder, { recursive: true, force: true });
   }
 });
+
+test('contrato completo: libSQL em arquivo temporário', async t => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(),'jornada-cloud-contract-'));
+  const client = createClient({url:'file:'+path.join(folder,'test.db')});
+  const server = createCloudApp({client}).listen(0,'127.0.0.1');
+  try {
+    await once(server,'listening');
+    await require('./api-contract.cjs')(t,(route,options)=>fetch(`http://127.0.0.1:${server.address().port}${route}`,options));
+  } finally { await new Promise(r=>server.close(r)); client.close(); fs.rmSync(folder,{recursive:true,force:true}); }
+});
+
+test('instâncias serverless: concorrência, persistência e rollback', async t => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(),'jornada-instances-'));
+  const url = 'file:'+path.join(folder,'test.db');
+  const clients = [createClient({url}),createClient({url})];
+  let pauseInsert=false, reached, resume;
+  const wrapped = { batch:(...a)=>clients[1].batch(...a), execute:async statement=>{
+    if(pauseInsert && statement.sql?.startsWith('INSERT INTO sessoes_conta')) {
+      pauseInsert=false; reached(); await new Promise(r=>{resume=r;});
+    }
+    return clients[1].execute(statement);
+  }};
+  const servers=[createCloudApp({client:clients[0]}).listen(0,'127.0.0.1'),createCloudApp({client:wrapped}).listen(0,'127.0.0.1')];
+  const request=(i,route,method='GET',data,session,csrf=true)=>fetch(`http://127.0.0.1:${servers[i].address().port}${route}`,{
+    method,headers:{'Content-Type':'application/json',...(session?{Cookie:session.cookie,...(csrf?{'X-CSRF-Token':session.csrf}:{})}:{}),'X-Forwarded-Proto':'https'},...(data===undefined?{}:{body:JSON.stringify(data)})
+  });
+  const user={usuario:'instancias.teste',senha:'senha-ficticia-instancias-123'};
+  const record={entrada:'08:00',saidaAlmoco:null,retornoAlmoco:null,saida:'18:30',extras:[]};
+  let session;
+  try {
+    await Promise.all(servers.map(s=>once(s,'listening')));
+    for(let i=0;i<2;i++) assert.equal((await request(i,'/api/health')).status,200);
+    await t.test('cadastro concorrente em clientes independentes e cookies HTTPS',async()=>{
+      const results=await Promise.all([0,1].map(i=>request(i,'/api/auth/register','POST',{...user,confirmarSenha:user.senha})));
+      assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
+      const r=results.find(r=>r.status===200);
+      const cookie=r.headers.get('set-cookie'); assert.ok(cookie.includes('Secure')&&cookie.includes('HttpOnly')&&cookie.includes('SameSite=Strict'));
+      session={cookie:cookie.split(';')[0],csrf:(await r.json()).csrfToken};
+      assert.equal(Number((await clients[0].execute('SELECT COUNT(*) AS n FROM conta')).rows[0].n),1);
+    });
+    await t.test('sessão e dados compartilhados entre instâncias',async()=>{
+      assert.equal((await request(1,'/api/auth/me','GET',undefined,session)).status,200);
+      assert.equal((await request(0,'/api/registros/2026-10-17','PUT',record,session)).status,201);
+      assert.deepEqual(await (await request(1,'/api/registros/2026-10-17','GET',undefined,session)).json(),record);
+    });
+    await t.test('rollback de backup após falha real no meio da transação',async()=>{
+      await clients[0].execute("CREATE TRIGGER rejeitar_teste BEFORE INSERT ON registros WHEN NEW.data = '2026-10-18' BEGIN SELECT RAISE(ABORT, 'teste privado'); END");
+      const old=console.error; const logs=[];console.error=(...args)=>logs.push(args.join(' '));
+      let r;
+      try {r=await request(1,'/api/backup','PUT',{registros:{'2026-10-19':record,'2026-10-18':record},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
+      assert.equal(r.status,503); assert.ok(!(await r.text()).includes('teste privado'));
+      assert.ok(logs.every(line=>!line.includes('teste privado')));
+      assert.equal((await request(0,'/api/registros/2026-10-17','GET',undefined,session)).status,200);
+      assert.equal((await request(0,'/api/registros/2026-10-19','GET',undefined,session)).status,404);
+      assert.equal((await (await request(0,'/api/configuracoes','GET',undefined,session)).json()).jornada,'08:00');
+      await clients[0].execute('DROP TRIGGER rejeitar_teste');
+    });
+    await t.test('limite atômico sob 16 logins concorrentes',async()=>{
+      const results=await Promise.all(Array.from({length:16},(_,i)=>request(i%2,'/api/auth/login','POST',{usuario:'concorrente.teste',senha:'incorreta'})));
+      assert.equal(results.filter(r=>r.status===401).length,8);
+      assert.equal(results.filter(r=>r.status===429).length,8);
+    });
+    await t.test('login em andamento não sobrevive à troca de senha',async()=>{
+      const barrier=new Promise(r=>{reached=r;});pauseInsert=true;
+      const login=request(1,'/api/auth/login','POST',user);
+      await barrier;
+      const r=await request(0,'/api/auth/password','POST',{senhaAtual:user.senha,novaSenha:'nova-ficticia-instancias-456'},session);
+      resume();assert.equal(r.status,204);assert.equal((await login).status,401);
+      assert.equal((await request(1,'/api/auth/me','GET',undefined,session)).status,401);
+    });
+    await t.test('persistência após recriar cliente e aplicação',async()=>{
+      await new Promise(r=>servers[0].close(r));clients[0].close();
+      clients[0]=createClient({url});servers[0]=createCloudApp({client:clients[0]}).listen(0,'127.0.0.1');await once(servers[0],'listening');
+      const r=await request(0,'/api/auth/login','POST',{...user,senha:'nova-ficticia-instancias-456'});assert.equal(r.status,200);
+      session={cookie:r.headers.get('set-cookie').split(';')[0],csrf:(await r.json()).csrfToken};
+      assert.deepEqual(await (await request(0,'/api/registros/2026-10-17','GET',undefined,session)).json(),record);
+      await clients[0].execute('UPDATE sessoes_conta SET expira_em = 0');
+      assert.equal((await request(1,'/api/auth/me','GET',undefined,session)).status,401);
+    });
+  } finally { if(resume)resume();await Promise.all(servers.map(s=>new Promise(r=>s.close(r))));clients.forEach(c=>c.close());fs.rmSync(folder,{recursive:true,force:true}); }
+});
+
+test('falha de inicialização retorna erro genérico e permite nova tentativa', async () => {
+  let fail=true;
+  const client={batch:async()=>{if(fail)throw new Error('credencial-privada-simulada');}};
+  const server=createCloudApp({client}).listen(0,'127.0.0.1');await once(server,'listening');
+  const old=console.error;const logs=[];console.error=(...a)=>logs.push(a.join(' '));
+  try {
+    const first=await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
+    assert.equal(first.status,503);assert.ok(!(await first.text()).includes('credencial-privada'));
+    assert.ok(logs.every(line=>!line.includes('credencial-privada')));
+    fail=false;
+    assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/health`)).status,200);
+  } finally {console.error=old;await new Promise(r=>server.close(r));}
+});

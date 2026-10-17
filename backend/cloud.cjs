@@ -130,15 +130,20 @@ function createCloudApp({ client: suppliedClient } = {}) {
     if (!req.is("application/json")) return res.status(415).json({ erro: "Envie os dados em JSON." });
     next();
   }
-  async function startSession(db, req, res, username) {
+  async function startSession(db, req, res, account) {
     const token = crypto.randomBytes(32).toString("base64url");
     const csrfToken = crypto.randomBytes(32).toString("base64url");
-    await db.execute(sql(
-      "INSERT INTO sessoes_conta (token_hash, csrf_token, expira_em) VALUES (?, ?, ?)",
-      [tokenHash(token), csrfToken, Date.now() + DURATION]
+    const inserted = await db.execute(sql(
+      "INSERT INTO sessoes_conta (token_hash, csrf_token, expira_em) " +
+      "SELECT ?, ?, ? FROM conta WHERE id = 1 AND senha_hash = ?",
+      [tokenHash(token), csrfToken, Date.now() + DURATION, account.senha_hash]
     ));
+    // Uma troca de senha durante o login não pode criar sessão com a senha antiga.
+    if (inserted.rowsAffected !== 1) {
+      return res.status(401).json({ erro: "Sua sessão terminou. Entre novamente." });
+    }
     res.cookie(COOKIE_NAME, token, { ...cookieOptions(req), maxAge: DURATION });
-    res.json({ usuario: username, csrfToken });
+    res.json({ usuario: account.usuario, csrfToken });
   }
   async function getAccount(db) {
     return (await db.execute("SELECT id, usuario, senha_hash FROM conta WHERE id = 1")).rows[0];
@@ -186,17 +191,19 @@ function createCloudApp({ client: suppliedClient } = {}) {
   });
   app.post("/api/auth/register", requireJson, async (req, res) => {
     const db = await database();
+    if (await getAccount(db)) return res.status(409).json({ erro: "Uma conta já foi criada. Faça login." });
     const username = typeof req.body?.usuario === "string" ? req.body.usuario.trim().toLowerCase() : "";
     const password = req.body?.senha;
     if (!validUser(username)) return res.status(400).json({ erro: "Use 3 a 40 caracteres: letras, números, ponto, hífen ou sublinhado; comece com uma letra." });
     if (!validPassword(password)) return res.status(400).json({ erro: "A senha precisa ter pelo menos 12 caracteres e no máximo 256 bytes." });
     if (req.body.confirmarSenha !== password) return res.status(400).json({ erro: "As senhas não coincidem." });
+    const passwordHash = encodePassword(password);
     const result = await db.execute(sql(
       "INSERT OR IGNORE INTO conta (id, usuario, senha_hash) VALUES (1, ?, ?)",
-      [username, encodePassword(password)]
+      [username, passwordHash]
     ));
     if (result.rowsAffected !== 1) return res.status(409).json({ erro: "Uma conta já foi criada. Faça login." });
-    await startSession(db, req, res, username);
+    await startSession(db, req, res, { usuario: username, senha_hash: passwordHash });
   });
   app.post("/api/auth/login", requireJson, async (req, res) => {
     const db = await database();
@@ -207,25 +214,28 @@ function createCloudApp({ client: suppliedClient } = {}) {
     }
     const key = attemptKey(req, username);
     const now = Date.now();
-    const attempt = (await db.execute(sql(
-      "SELECT quantidade, expira_em FROM login_tentativas WHERE chave = ?", [key]
-    ))).rows[0];
-    if (attempt && attempt.expira_em > now && attempt.quantidade >= 8) {
+    // Reserva atômica antes do scrypt: invocações concorrentes compartilham o teto.
+    await db.batch([
+      sql("DELETE FROM login_tentativas WHERE expira_em <= ?", [now]),
+      sql("DELETE FROM sessoes_conta WHERE expira_em <= ?", [now])
+    ], "write");
+    const attempt = await db.execute(sql(
+      "INSERT INTO login_tentativas (chave, quantidade, expira_em) VALUES (?, 1, ?) " +
+      "ON CONFLICT(chave) DO UPDATE SET quantidade = quantidade + 1 " +
+      "WHERE quantidade < 8 RETURNING quantidade",
+      [key, now + ATTEMPT_WINDOW]
+    ));
+    if (!attempt.rows.length) {
+      res.set("Retry-After", "900");
       return res.status(429).json({ erro: "Muitas tentativas. Tente novamente em 15 minutos." });
     }
     const account = await getAccount(db);
     const valid = verifyPassword(password, account?.senha_hash || fakeHash);
     if (!account || account.usuario !== username || !valid) {
-      await db.execute(sql(
-        "INSERT INTO login_tentativas (chave, quantidade, expira_em) VALUES (?, 1, ?) " +
-        "ON CONFLICT(chave) DO UPDATE SET quantidade = CASE WHEN expira_em <= ? THEN 1 ELSE quantidade + 1 END, " +
-        "expira_em = CASE WHEN expira_em <= ? THEN excluded.expira_em ELSE expira_em END",
-        [key, now + ATTEMPT_WINDOW, now, now]
-      ));
       return res.status(401).json({ erro: "Usuário ou senha incorretos." });
     }
     await db.execute(sql("DELETE FROM login_tentativas WHERE chave = ?", [key]));
-    await startSession(db, req, res, account.usuario);
+    await startSession(db, req, res, account);
   });
   app.get("/api/auth/me", requireAuth, (req, res) => {
     res.json({ usuario: req.account.usuario, csrfToken: req.session.csrf_token });
@@ -237,7 +247,7 @@ function createCloudApp({ client: suppliedClient } = {}) {
   });
   app.post("/api/auth/password", requireAuth, requireCsrf, requireJson, async (req, res) => {
     const { senhaAtual, novaSenha } = req.body || {};
-    if (typeof senhaAtual !== "string" || !validPassword(novaSenha)) {
+    if (typeof senhaAtual !== "string" || Buffer.byteLength(senhaAtual, "utf8") > 256 || !validPassword(novaSenha)) {
       return res.status(400).json({ erro: "Informe a senha atual e uma nova senha de pelo menos 12 caracteres." });
     }
     if (!verifyPassword(senhaAtual, req.account.senha_hash)) {
@@ -345,7 +355,8 @@ function createCloudApp({ client: suppliedClient } = {}) {
   app.use((error, _req, res, _next) => {
     if (error.status === 400) return res.status(400).json({ erro: "JSON inválido." });
     if (error.status === 413) return res.status(413).json({ erro: "Backup excede o limite de 2 MB." });
-    console.error("Falha da API em nuvem:", error);
+    // Erros de transporte podem conter URLs/headers privados: nunca registrar o objeto.
+    console.error("Falha da API em nuvem; operação indisponível.");
     res.status(503).json({ erro: "Servidor ou banco indisponível. Tente novamente." });
   });
   return app;

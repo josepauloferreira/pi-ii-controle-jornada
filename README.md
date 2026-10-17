@@ -33,10 +33,10 @@ A implementação concluída no repositório **não significa homologação como
 
 - **Frontend:** HTML, CSS, JavaScript puro e Vite (sem React).
 - **Backend:** Node.js e Express.
-- **Persistência:** SQLite com `better-sqlite3`.
-- **Autenticação:** conta única, hash de senha `scrypt`, sessões no SQLite e cookie de sessão.
+- **Persistência:** SQLite com `better-sqlite3` no desenvolvimento; Turso libSQL remoto na Vercel.
+- **Autenticação:** conta única, hash de senha `scrypt`, sessões no banco e cookie de sessão.
 
-**Requisito:** Node.js 22.12 ou superior e npm. Para os comandos abaixo, use um terminal na **raiz do repositório**.
+**Requisito:** Node.js 24 LTS (ou 22.12+) e npm. Para os comandos abaixo, use um terminal na **raiz do repositório**.
 
 ## Instalação e execução
 
@@ -45,8 +45,8 @@ A implementação concluída no repositório **não significa homologação como
 O frontend e o backend têm `package.json` separados. Instale ambos:
 
 ~~~bash
-npm install
-npm --prefix backend install
+npm ci
+npm --prefix backend ci
 ~~~
 
 ### 2. Iniciar frontend e backend com um comando (Linux / Codespaces)
@@ -110,10 +110,11 @@ Na raiz do repositório, depois de instalar as dependências:
 
 ~~~bash
 npm --prefix backend test
+npm run test:cloud
 npm run build
 ~~~
 
-O teste automatizado do backend usa um **SQLite temporário**, sem modificar `backend/dados/jornada.db`. Ele cobre cadastro concorrente de conta única, login, autorização de rotas, CSRF, preservação de registro antigo, troca de senha, logout e limite de tentativas.
+O teste automatizado do backend usa um **SQLite temporário**, sem modificar `backend/dados/jornada.db`. As suítes local e libSQL compartilham testes do contrato HTTP de registros, horários, extras, configurações e backups. A suíte de nuvem verifica persistência entre clientes, limite concorrente de login e rollback de restauração após falha SQL. O teste original cobre cadastro concorrente de conta única, login, autorização de rotas, CSRF, preservação de registro antigo, troca de senha, logout e limite de tentativas.
 
 O build do frontend usa `vite build` e gera a pasta `dist/`, ignorada pelo Git. Os testes automatizados e o build foram executados e aprovados durante a integração da autenticação. **Não há workflow de CI configurado no repositório**; novas alterações precisam ser verificadas novamente.
 
@@ -164,7 +165,7 @@ As rotas de dados exigem sessão autenticada. As operações de escrita exigem t
 
 O projeto oferece uma implantação com **frontend Vite na Vercel, API Express serverless e banco Turso libSQL remoto**. O backend SQLite local permanece disponível, sem mudanças no fluxo de desenvolvimento. Consulte **[DEPLOY-VERCEL.md](DEPLOY-VERCEL.md)** para instalar, testar e configurar a hospedagem.
 
-**Não compartilhe o endereço antes de criar a conta inicial** e não associe os deployments de preview ao banco de produção.
+O Preview exige **Vercel Authentication / Standard Protection** antes do cadastro inicial e usa o banco separado `meu-ponto-pi2-preview`. Não associe previews ao banco de produção. A publicação em produção e o merge dependem de aprovação expressa. Consulte o guia para variáveis, atualizações, backups e checklist de produção.
 
 ## Colaboração e limitações
 

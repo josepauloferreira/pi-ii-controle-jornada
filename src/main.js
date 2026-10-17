@@ -79,7 +79,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 limparSessao();
                 mostrarEntrada(false);
                 document.getElementById("authError").textContent =
-                    "Servidor indisponível. Inicie o backend e atualize a página.";
+                    "Servidor indisponível. Tente atualizar a página.";
                 console.error("Erro ao acessar o servidor:", erro);
             }
         }
@@ -170,7 +170,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             }
         }
 
-        // O SQLite é a fonte dos registros e das configurações.
+        // O banco de dados é a fonte dos registros e das configurações.
         async function requisitarAPI(caminho, opcoes = {}) {
             const metodo = (opcoes.method || "GET").toUpperCase();
             const headers = { ...(opcoes.headers || {}) };
@@ -245,7 +245,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 });
                 if (oferecerMigracao && faltantes.length && !localStorage.getItem("meu_ponto_backup_restaurado")) {
                     if (window.confirm(
-                        `Foram encontrados ${faltantes.length} dia(s) no navegador que não estão no SQLite. ` +
+                        `Foram encontrados ${faltantes.length} dia(s) no navegador que não estão no banco de dados. ` +
                         "Deseja copiá-los para o banco? Dias já existentes no banco não serão substituídos. " +
                         "Se preferir, cancele e baixe o backup local antigo."
                     )) {
@@ -275,7 +275,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                     && Object.entries(configPadrao).every(([campo, valor]) => configServidor[campo] === valor)
                     && Object.entries(configPadrao).some(([campo, valor]) => configLocal[campo] !== valor);
                 if (migrarConfig && window.confirm(
-                    "Há configurações antigas neste navegador e o SQLite ainda usa as configurações padrão. " +
+                    "Há configurações antigas neste navegador e o banco de dados ainda usa as configurações padrão. " +
                     "Deseja copiá-las para o banco? Se cancelar, a cópia local será preservada."
                 )) {
                     configServidor = await requisitarAPI("/api/configuracoes", {
@@ -297,8 +297,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
                     mostrarMensagem(`Há ${conflitantes.length} dia(s) antigos divergentes no navegador. Baixe o backup local antes de substituí-los.`);
                 }
             } catch (erro) {
-                console.error("Falha ao carregar dados do SQLite:", erro);
-                mostrarMensagem("Não foi possível carregar os dados do servidor. Confira o backend na porta 3000.");
+                console.error("Falha ao carregar dados do banco de dados:", erro);
+                mostrarMensagem("Não foi possível carregar os dados do servidor. Confira sua conexão e tente novamente.");
             } finally {
                 document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
             }
@@ -400,7 +400,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
 
         async function salvarConfiguracoes() {
             if (!pontoServidorPronto) {
-                mostrarMensagem("Aguarde a conexão com o SQLite.");
+                mostrarMensagem("Aguarde a conexão com o banco de dados.");
                 return;
             }
             const novas = {
@@ -415,11 +415,11 @@ const STORAGE_PONTO = "meu_ponto_registros";
                     body: JSON.stringify(novas)
                 });
                 atualizarTela();
-                mostrarMensagem("Configurações salvas no SQLite!");
+                mostrarMensagem("Configurações salvas no banco de dados!");
             } catch (erro) {
                 console.error("Falha ao salvar configurações:", erro);
                 carregarConfiguracoes();
-                mostrarMensagem("Erro ao salvar as configurações no SQLite.");
+                mostrarMensagem("Erro ao salvar as configurações no banco de dados.");
             }
         }
 
@@ -453,10 +453,10 @@ async function baterPonto() {
             try {
                 registros[data] = await salvarRegistroNoServidor(data, registro);
                 atualizarTela();
-                mostrarMensagem(`Ponto registrado às ${horario} no SQLite.`);
+                mostrarMensagem(`Ponto registrado às ${horario} no banco de dados.`);
             } catch (erro) {
                 console.error("Não foi possível registrar o ponto:", erro);
-                mostrarMensagem("Falha ao salvar o ponto no SQLite. Tente novamente.");
+                mostrarMensagem("Falha ao salvar o ponto no banco de dados. Tente novamente.");
             } finally {
                 registrandoPonto = false;
                 document.getElementById("btnBaterPonto").disabled = false;
@@ -473,8 +473,8 @@ async function baterPonto() {
                 else await requisitarRegistro(data, { method: "DELETE" });
                 return true;
             } catch (erro) {
-                console.error("Falha ao salvar registros no SQLite:", erro);
-                mostrarMensagem("Erro ao salvar no SQLite. Verifique a conexão.");
+                console.error("Falha ao salvar registros no banco de dados:", erro);
+                mostrarMensagem("Erro ao salvar no banco de dados. Verifique a conexão.");
                 return false;
             }
         }
@@ -874,14 +874,14 @@ async function baterPonto() {
         }
 
         function exportarJSON() {
-            if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o SQLite para fazer backup.");
+            if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o banco de dados para fazer backup.");
             const backup = { versao: 1, exportadoEm: new Date().toISOString(), configuracoes, registros };
             baixarArquivo(`backup-meu-ponto-${dataHoje()}.json`, JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
             mostrarMensagem("Backup JSON baixado.");
         }
 
         function exportarCSV() {
-            if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o SQLite para exportar CSV.");
+            if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o banco de dados para exportar CSV.");
             const mes = document.getElementById("mesFiltro").value;
             const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo"]];
             Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
@@ -906,7 +906,7 @@ async function baterPonto() {
                     throw new Error("Backup precisa conter a propriedade registros.");
                 }
                 if (!window.confirm(
-                    "Restaurar este backup substituirá TODOS os registros do SQLite" +
+                    "Restaurar este backup substituirá TODOS os registros do banco de dados" +
                     " e as configurações presentes no arquivo. Baixe primeiro um backup atual. Continuar?"
                 )) return;
 
@@ -925,8 +925,8 @@ async function baterPonto() {
                     console.warn("Não foi possível registrar a preferência de migração local:", erroLocal);
                 }
                 await carregarDadosIniciais({ oferecerMigracao: false });
-                if (!pontoServidorPronto) throw new Error("Restauração concluída no SQLite, mas não foi possível recarregar a interface.");
-                mostrarMensagem("Backup restaurado no SQLite.");
+                if (!pontoServidorPronto) throw new Error("Restauração concluída no banco de dados, mas não foi possível recarregar a interface.");
+                mostrarMensagem("Backup restaurado no banco de dados.");
             } catch (erro) {
                 console.error("Falha ao restaurar o backup:", erro);
                 mostrarMensagem("Não foi possível restaurar o backup. Confira o arquivo e o servidor.");
