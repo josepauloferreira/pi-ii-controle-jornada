@@ -52,5 +52,47 @@ jobs:
       - name: Testes de integração libSQL e entrypoint Vercel
         run: npm run test:cloud
 
+      - name: Testes unitários dos cálculos de jornada
+        run: npm run test:unit
+
       - name: Compilar frontend Vite
         run: npm run build
+
+  e2e:
+    name: Chromium · fluxos de ponta a ponta
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Configurar Node.js 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+
+      - name: Instalar dependências da aplicação
+        run: |
+          npm ci
+          npm --prefix backend ci
+
+      - name: Instalar Playwright isolado para testes
+        run: npm --prefix e2e install --no-audit --no-fund
+
+      - name: Preparar lockfile E2E para versionamento
+        run: node -e 'const fs=require("node:fs"); console.log("LOCK_BEGIN"+fs.readFileSync("e2e/package-lock.json").toString("base64")+"LOCK_END");'
+
+      - name: Instalar Chromium e dependências do sistema
+        run: ./e2e/node_modules/.bin/playwright install --with-deps chromium
+
+      - name: Executar cenários E2E com banco temporário
+        run: npm run test:e2e
