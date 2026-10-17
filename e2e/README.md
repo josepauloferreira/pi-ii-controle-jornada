@@ -39,8 +39,8 @@ São **3 cenários E2E versionados**, que não correspondem exatamente aos 14 ce
 ## Depuração
 
 ```bash
-npm run test:e2e -- --headed
-npm run test:e2e -- --grep "cadastro"
+npm --prefix e2e test -- --headed
+npm --prefix e2e test -- --grep "cadastro"
 ```
 
 A flag é repassada para a CLI Playwright. Traces e screenshots de falhas são gerados em `e2e/test-results/` e ignorados pelo Git. Não anexe traces que contenham credenciais reais.
