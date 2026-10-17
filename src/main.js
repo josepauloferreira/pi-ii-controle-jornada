@@ -9,6 +9,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
 
         document.addEventListener("DOMContentLoaded", () => {
             carregarConfiguracoes();
+            configurarCampos24Horas();
             configurarMesAtual();
             atualizarRelogio();
             window.setInterval(atualizarRelogio, 1000);
@@ -186,6 +187,19 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 resultado[data] = registro;
             }
             return resultado;
+        }
+
+        // O seletor nativo de hora pode mostrar AM/PM conforme o navegador.
+        // Os campos de texto mantêm a entrada em HH:mm de 24 horas em qualquer idioma.
+        function configurarCampos24Horas() {
+            document.querySelectorAll('[data-formato-horario="24h"]').forEach(campo => {
+                campo.addEventListener("input", () => {
+                    // Permite usar teclado numérico: 0830 passa a 08:30.
+                    if (/^\d{4}$/.test(campo.value)) {
+                        campo.value = `${campo.value.slice(0, 2)}:${campo.value.slice(2)}`;
+                    }
+                });
+            });
         }
 
         function horarioValido(valor) {
