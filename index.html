@@ -19,37 +19,25 @@
         </div>
     </header>
 
-    <div class="container">
-
-        <div style="margin-bottom:20px;padding:12px 16px;border-left:4px solid #2563eb;background:#eff6ff;border-radius:8px;color:#1e3a8a">Os <strong>registros e configurações</strong> agora são salvos no SQLite. Cópias antigas no navegador são preservadas e podem ser exportadas separadamente. <button type="button" id="btnBackupLocal" class="btn btn-secundario" style="margin-top:8px;display:none">Baixar backup dos dados antigos do navegador</button></div>
-
-        <!-- TOPO -->
-        <div class="topo">
-
-            <div>
-                <div class="relogio" id="relogio">
-                    00:00:00
-                </div>
-
-                <div class="data-atual" id="dataAtual">
-                    --
-                </div>
-            </div>
-
+    <main class="container">
+<div class="page-intro">
+            <h2>Registro de jornada</h2>
+            <p>Seus horários e o saldo do dia, em um só lugar.</p>
         </div>
-
-
-        <!-- BATER PONTO -->
+        <div class="dashboard-grid">
+<!-- BATER PONTO -->
         <div class="card">
 
             <h2>Ponto de hoje</h2>
 
-            <div class="bater-ponto">
-
-                <button class="btn-ponto" id="btnBaterPonto" onclick="baterPonto()">
-                    BATER PONTO
-                </button>
-
+            <div class="topo">
+                <div>
+                    <div class="relogio" id="relogio">00:00:00</div>
+                    <div class="data-atual" id="dataAtual">--</div>
+                </div>
+                <div class="bater-ponto">
+                    <button class="btn-ponto" type="button" id="btnBaterPonto" onclick="baterPonto()">Registrar ponto</button>
+                </div>
             </div>
 
             <div class="batidas-hoje">
@@ -104,16 +92,14 @@
 
                 <br>
 
-                <button class="btn btn-secundario" onclick="abrirModalExtra()">
+                <button class="btn btn-secundario" type="button" onclick="abrirModalExtra()">
                     + Adicionar batida extra
                 </button>
 
             </div>
 
         </div>
-
-
-        <!-- RESUMO DO DIA -->
+<!-- RESUMO DO DIA -->
         <div class="card">
 
             <h2>Resumo de hoje</h2>
@@ -143,42 +129,8 @@
             </div>
 
         </div>
-
-
-        <!-- CONFIGURAÇÕES -->
-        <div class="card">
-
-            <h2>Configuração da jornada</h2>
-
-            <div class="configuracao">
-
-                <div>
-                    <label>Horas por dia</label>
-
-                    <input type="time" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()">
-                </div>
-
-                <div>
-                    <label>Início da semana</label>
-
-                    <select id="inicioSemana" onchange="salvarConfiguracoes()">
-                        <option value="1">Segunda-feira</option>
-                        <option value="0">Domingo</option>
-                    </select>
-                </div>
-
-                <div>
-                    <label>Nome do funcionário</label>
-
-                    <input type="text" id="nomeFuncionario" placeholder="Seu nome" onchange="salvarConfiguracoes()">
-                </div>
-
-            </div>
-
         </div>
-
-
-        <!-- HISTÓRICO -->
+<!-- HISTÓRICO -->
         <div class="card">
 
             <h2>Histórico</h2>
@@ -187,7 +139,7 @@
 
                 <div class="filtro-item">
 
-                    <label>Mês</label>
+                    <label for="mesFiltro">Mês</label>
 
                     <input type="month" id="mesFiltro" onchange="renderizarHistorico()">
 
@@ -208,8 +160,6 @@
                 <input type="file" id="arquivoJSON" accept=".json" style="display:none" onchange="importarJSON(event)">
 
             </div>
-
-            <br>
 
             <div class="tabela-container">
 
@@ -240,13 +190,49 @@
             </div>
 
         </div>
+<!-- CONFIGURAÇÕES -->
+        <div class="card">
 
-    </div>
+            <h2>Configuração da jornada</h2>
+
+            <div class="configuracao">
+
+                <div>
+                    <label for="jornadaDiaria">Horas por dia</label>
+
+                    <input type="time" id="jornadaDiaria" value="08:00" onchange="salvarConfiguracoes()">
+                </div>
+
+                <div>
+                    <label for="inicioSemana">Início da semana</label>
+
+                    <select id="inicioSemana" onchange="salvarConfiguracoes()">
+                        <option value="1">Segunda-feira</option>
+                        <option value="0">Domingo</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="nomeFuncionario">Nome do funcionário</label>
+
+                    <input type="text" id="nomeFuncionario" placeholder="Seu nome" onchange="salvarConfiguracoes()">
+                </div>
+
+            </div>
+
+        </div>
+        <details class="aviso-dados">
+            <summary>Informações sobre armazenamento</summary>
+            <p>Os <strong>registros e configurações</strong> são salvos no SQLite. Cópias antigas no navegador permanecem preservadas e podem ser exportadas separadamente.</p>
+            <button type="button" id="btnBackupLocal" class="btn btn-secundario" style="display:none">Baixar backup dos dados antigos do navegador</button>
+        </details>
+
+    </main>
 
 
     <!-- MODAL BATIDA EXTRA -->
 
-    <div class="modal" id="modalExtra">
+    <div class="modal" id="modalExtra" role="dialog" aria-modal="true" aria-labelledby="tituloModalExtra">
 
         <div class="modal-content">
 
@@ -261,7 +247,7 @@
 
             <div class="campo">
 
-                <label>Horário</label>
+                <label for="horarioExtra">Horário</label>
 
                 <input type="time" id="horarioExtra">
 
@@ -269,7 +255,7 @@
 
             <div class="campo">
 
-                <label>Descrição</label>
+                <label for="descricaoExtra">Descrição</label>
 
                 <input type="text" id="descricaoExtra" placeholder="Ex.: Retorno de atividade">
 
@@ -294,17 +280,17 @@
 
     <!-- MODAL EDIÇÃO -->
 
-    <div class="modal" id="modalEdicao">
+    <div class="modal" id="modalEdicao" role="dialog" aria-modal="true" aria-labelledby="tituloEdicao">
 
         <div class="modal-content">
 
-            <h2>Editar registro</h2>
+            <h2 id="tituloEdicao">Editar registro</h2>
 
             <input type="hidden" id="dataEdicao">
 
             <div class="campo">
 
-                <label>Entrada</label>
+                <label for="editEntrada">Entrada</label>
 
                 <input type="time" id="editEntrada">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('entrada')">Excluir esta batida</button>
@@ -313,7 +299,7 @@
 
             <div class="campo">
 
-                <label>Saída almoço</label>
+                <label for="editSaidaAlmoco">Saída almoço</label>
 
                 <input type="time" id="editSaidaAlmoco">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saidaAlmoco')">Excluir esta batida</button>
@@ -322,7 +308,7 @@
 
             <div class="campo">
 
-                <label>Retorno almoço</label>
+                <label for="editRetorno">Retorno almoço</label>
 
                 <input type="time" id="editRetorno">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('retornoAlmoco')">Excluir esta batida</button>
@@ -331,7 +317,7 @@
 
             <div class="campo">
 
-                <label>Saída</label>
+                <label for="editSaida">Saída</label>
 
                 <input type="time" id="editSaida">
                 <button class="btn btn-vermelho btn-apagar-batida" type="button" onclick="excluirBatidaEmEdicao('saida')">Excluir esta batida</button>
@@ -355,7 +341,7 @@
     </div>
 
 
-    <div class="mensagem" id="mensagem">
+    <div class="mensagem" id="mensagem" role="status" aria-live="polite">
         Registro salvo!
     </div>
 
