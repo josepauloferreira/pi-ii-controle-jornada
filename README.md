@@ -10,14 +10,14 @@ Aplicação web para registrar e acompanhar a jornada de trabalho em home office
 - [x] [2. Criar backend com Express e SQLite — #14](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/14)
 - [x] [3. Conectar o registro de ponto ao backend — #15](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/15)
 - [x] [4. Conectar histórico, configurações e exportação — #16](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/16)
-- [ ] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
+- [x] [5. Refinar a interface visual — #18](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/18)
 - [ ] [6. Cadastro e login de conta única — #22](https://github.com/josepauloferreira/pi-ii-controle-jornada/issues/22)
 
-As etapas 5 e 6 permanecem em branches separadas e dependem de validação antes do merge.
+A etapa 5 foi integrada à `main` pelo PR #23. A etapa 6 permanece na branch de autenticação até revisão e merge.
 
 **Já disponível:** API Express com banco SQLite e demonstração integrada em `backend/demo.html` ([PR #17](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/17)).
 
-**Nesta branch:** interface clara e autenticação de conta única. As etapas #18 e #22 continuam abertas até sua aprovação.
+**Nesta branch:** autenticação de conta única sobre a interface Apple Light já integrada à `main`. A issue #22 permanece aberta até aprovação do PR.
 
 
 ## O que o sistema faz
