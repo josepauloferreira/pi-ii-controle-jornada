@@ -88,7 +88,7 @@ A conta é pessoal e única: **não existe painel de administradores, múltiplos
 - Histórico, registros, configurações e restauração de backups exigem login. Operações de escrita também verificam o token CSRF da sessão.
 - Há limitação de tentativas de login.
 
-**Importante:** quem primeiro acessar uma instância ainda sem conta pode registrar a conta única. **Não publique uma instalação vazia**. Este protótipo não deve ser tratado como serviço pronto para dados pessoais sensíveis.
+**Importante:** quem primeiro acessar uma instância ainda sem conta pode registrar a conta única. **Não exponha publicamente uma instalação vazia**; no Preview, mantenha Vercel Authentication ativa. Este protótipo não deve ser tratado como serviço pronto para dados pessoais sensíveis.
 
 ## Banco de dados, histórico antigo e backups
 

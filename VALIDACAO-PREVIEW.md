@@ -46,6 +46,10 @@ Consulta independente por `turso db shell meu-ponto-pi2-preview` confirmou uma c
 
 Os logs iniciais contiveram dois avisos de depreciação Node.js `DEP0169` sobre `url.parse()`, classificados pela plataforma como stderr/error. Não eram falhas das rotas: as respostas e a navegação passaram. O aplicativo usa `new URL` no handler; não foram ocultados warnings nem alteradas dependências externas para silenciá-los. Monitore esses avisos em atualizações do runtime/Express/Vercel.
 
+O redeploy do commit `054e84aaba5c80216b47cb911aa936d6f6c92a72` ficou **READY** no deployment `dpl_BRpwEGCqpffmSsHxc4icMHgZh5Wb`: [Preview](https://pi-ii-controle-jornada-p7ll0bxhg-ze17.vercel.app). A conta, a mesma sessão, os registros e as configurações foram comparados entre os dois deployments e preservados. Os 14 cenários foram novamente aprovados nesse endereço, antes da liberação do cadastro solicitada pelo usuário. O check Vercel no GitHub foi aprovado.
+
+Endereço da branch para revisão: [Preview protegido](https://pi-ii-controle-jornada-git-feat-deploy-vercel-turso-ze17.vercel.app).
+
 ## Configuração e incidente de destino automático
 
 Projeto existente: **ze17/pi-ii-controle-jornada**, preset Vite, raiz do repositório, `npm ci`, `npm run build`, `dist`, Node.js 24.x, região configurada `iad1`. Git vinculado ao repositório correto, branch de produção `main`.
@@ -56,6 +60,6 @@ A primeira chamada `vercel deploy --scope ze17` foi promovida automaticamente pe
 
 ## Operação e limites
 
-A conta fictícia de Preview tem senha aleatória, preservada somente em arquivo local privado (modo 600) dentro de `.vercel/`, excluído de Git e dos uploads. Não reutilize essa conta ou senha em Production. Os dados de teste permanecem no banco de Preview; nenhum banco existente foi excluído.
+Após a validação, o usuário autorizou liberar seu primeiro cadastro. Foram removidas somente a conta fictícia e suas sessões do banco de Preview; a comparação integral dos registros e configurações antes e depois confirmou sua preservação. O arquivo local privado com a credencial descartável foi removido. A API voltou a informar `cadastroDisponivel=true` e o navegador mostrou **Criar conta**, mantendo a autenticação Vercel. Nenhuma nova conta foi criada pela automação após essa liberação. O próximo cadastro cabe ao usuário. Os dados fictícios de jornada permanecem no banco de Preview; nenhum banco foi excluído.
 
 O plano gratuito e os serviços externos precisam de acompanhamento. O projeto continua sendo demonstração acadêmica. A validação de uma instância não certifica carga, disponibilidade ou homologação legal. A inicialização de conta em produção requer condições controladas e credenciais/banco separados, conforme o checklist de [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md).
