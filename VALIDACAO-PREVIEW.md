@@ -1,6 +1,6 @@
 # Evidências de validação do Preview
 
-Validação em 17/10/2026, exclusivamente com dados fictícios. Produção e merge aguardam aprovação expressa.
+Registro da etapa de Preview em 17/10/2026, exclusivamente com dados fictícios, antes da aprovação do merge e da produção. A etapa posterior está em [VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md).
 
 ## Código e testes locais
 
