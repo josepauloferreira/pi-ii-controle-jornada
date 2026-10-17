@@ -147,7 +147,7 @@ npm run build               # Compilação do frontend Vite
 
 Os números acima vêm dos relatórios de 17/10/2026. Não são uma medição de percentual de cobertura nem uma nova execução desta documentação. O contrato em `backend/api-contract.cjs` cobre autenticação, CSRF, datas e horários `HH:mm`, histórico, configurações, backups e erros da API.
 
-O workflow de **GitHub Actions** executa automaticamente as suítes e o build em **Node.js 22 e 24** para PRs direcionados à `main`. A [primeira execução da CI passou nas duas versões](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752); sua integração à `main` está prevista no [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). Testes E2E reproduzíveis e testes unitários dos cálculos de jornada ainda são melhorias futuras.
+O workflow de **GitHub Actions** executa automaticamente as suítes e o build em **Node.js 22 e 24** para PRs direcionados à `main`. A [primeira execução da CI passou nas duas versões](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752), e o workflow foi integrado à `main` pelo [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). Testes E2E reproduzíveis e testes unitários dos cálculos de jornada ainda são melhorias futuras.
 
 **[Ler a estratégia completa de testes, a matriz de cobertura e as limitações](TESTES.md)** · [Evidências do Preview](VALIDACAO-PREVIEW.md) · [Evidências de produção](VALIDACAO-PRODUCAO.md)
 
@@ -187,7 +187,7 @@ Deployments de branches geram previews. O deploy automático da `main` está des
 │   └── *.test.*               # Testes de integração
 ├── vite.config.js             # Configuração e proxy de desenvolvimento
 ├── vercel.json                # Build, região e roteamento de nuvem
-├── .github/workflows/ci.yml  # CI em Node.js 22 e 24 (PR #29)
+├── .github/workflows/ci.yml  # CI em Node.js 22 e 24
 ├── TESTES.md                  # Estratégia e matriz de testes
 ├── DEPLOY-VERCEL.md           # Instalação, ambientes e publicação
 ├── VALIDACAO-PREVIEW.md       # Evidências da validação executada
