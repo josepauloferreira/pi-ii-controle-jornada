@@ -127,29 +127,40 @@ O cadastro de uma conta não apaga registros de jornada já existentes. A transf
 
 ## Testes e qualidade
 
-O projeto tem **testes automatizados de integração HTTP** para SQLite e libSQL, um teste do entrypoint serverless e evidências de validação na Vercel. As suítes de Node usam **bancos temporários**; não precisam de tokens Turso nem alteram dados reais.
+A aplicação tem testes de **integração HTTP** para SQLite e libSQL, **testes unitários dos cálculos de jornada** e uma suíte de **navegação E2E com Playwright**, sem utilizar Turso ou dados reais.
 
-Depois de instalar as dependências (veja [Executar localmente](#executar-localmente)), execute:
+Depois de instalar as dependências, execute:
 
 ```bash
 npm --prefix backend test   # Express + SQLite
-npm run test:cloud          # Express + libSQL e roteamento da Vercel
-npm run build               # Compilação do frontend Vite
+npm run test:cloud          # Express + libSQL e entrypoint serverless
+npm run test:unit           # Cálculos e validação de jornada
+npm run build               # Build Vite
 ```
 
-| Verificação | Como é executada | Evidência registrada |
+Para instalar e executar os testes reais de interface em Chromium, sem tocar nos bancos do usuário:
+
+```bash
+npm --prefix e2e ci
+./e2e/node_modules/.bin/playwright install chromium
+npm run test:e2e
+```
+
+| Camada | Verificação | Resultado registrado |
 | --- | --- | --- |
-| Backend local SQLite | `backend/auth.test.js` + contrato compartilhado | **17 testes aprovados**, 0 falhas |
-| Backend em nuvem libSQL | `backend/cloud.test.cjs` + `backend/entry.test.cjs` | **41 testes aprovados**, 0 falhas |
-| Frontend | `npm run build` → `dist/` | Build Vite aprovado |
-| Preview hospedado | HTTP + navegador Chromium/Playwright, **não versionado como suíte E2E** | **14 cenários aprovados** |
-| Produção | Smoke tests de disponibilidade e acesso | Verificações registradas separadamente |
+| SQLite local | Testes de integração e contrato HTTP | **17 aprovados**, 0 falhas |
+| libSQL / Vercel Function | Testes de integração, concorrência e contrato HTTP | **41 aprovados**, 0 falhas |
+| Regras do frontend | `node:test` sobre `src/jornada.js` | **12 testes unitários aprovados** |
+| Interface local | Playwright + Chromium + SQLite temporário | **3 cenários E2E aprovados** |
+| Frontend | `npm run build` | Build aprovado |
+| Preview hospedado | HTTP e navegador, registrado em relatório anterior | **14 cenários históricos** |
+| Produção | Smoke tests de disponibilidade e acesso | Evidências documentadas separadamente |
 
-Os números acima vêm dos relatórios de 17/10/2026. Não são uma medição de percentual de cobertura nem uma nova execução desta documentação. O contrato em `backend/api-contract.cjs` cobre autenticação, CSRF, datas e horários `HH:mm`, histórico, configurações, backups e erros da API.
+Os números correspondem a resultados registrados em 17/10/2026, não a percentuais de cobertura. **Os 3 testes E2E reproduzíveis são diferentes dos 14 cenários históricos hospedados na Vercel.** O Playwright inicia Vite e Express locais usando um arquivo SQLite descartável, sem credenciais externas.
 
-O workflow de **GitHub Actions** executa automaticamente as suítes e o build em **Node.js 22 e 24** para PRs direcionados à `main`. A [primeira execução da CI passou nas duas versões](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752), e o workflow foi integrado à `main` pelo [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). Testes E2E reproduzíveis e testes unitários dos cálculos de jornada ainda são melhorias futuras.
+A [CI do GitHub Actions](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml) valida integração, testes unitários e build em **Node.js 22 e 24**, além de executar os E2E em um job Chromium separado. A [primeira execução com Playwright passou](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39053909867).
 
-**[Ler a estratégia completa de testes, a matriz de cobertura e as limitações](TESTES.md)** · [Evidências do Preview](VALIDACAO-PREVIEW.md) · [Evidências de produção](VALIDACAO-PRODUCAO.md)
+**[Estratégia e cobertura detalhadas](TESTES.md)** · [Como executar Playwright](e2e/README.md) · [Evidências do Preview](VALIDACAO-PREVIEW.md) · [Evidências da produção](VALIDACAO-PRODUCAO.md)
 
 ## Hospedagem e configuração
 
@@ -176,6 +187,7 @@ Deployments de branches geram previews. O deploy automático da `main` está des
 ├── index.html                 # Interface da aplicação
 ├── src/
 │   ├── main.js                # Interações, autenticação e chamadas à API
+│   ├── jornada.js             # Cálculos puros de jornada e saldo
 │   └── style.css              # Estilos e responsividade
 ├── api/index.js               # Entrada da Vercel Function
 ├── backend/
@@ -185,6 +197,8 @@ Deployments de branches geram previews. O deploy automático da `main` está des
 │   ├── cloud.cjs              # API Express com Turso libSQL
 │   ├── api-contract.cjs       # Contrato HTTP compartilhado pelos testes
 │   └── *.test.*               # Testes de integração
+├── tests/jornada.test.js      # Testes unitários em node:test
+├── e2e/                       # Playwright com banco SQLite descartável
 ├── vite.config.js             # Configuração e proxy de desenvolvimento
 ├── vercel.json                # Build, região e roteamento de nuvem
 ├── .github/workflows/ci.yml  # CI em Node.js 22 e 24
@@ -214,7 +228,8 @@ Todas as rotas usam o prefixo `/api`. Dados de jornada exigem sessão autenticad
 
 ## Documentação
 
-- [TESTES.md](TESTES.md): comandos reproduzíveis, contrato compartilhado, matriz de testes, CI e limitações conhecidas.
+- [TESTES.md](TESTES.md): integração, testes unitários, E2E, cobertura documentada, CI e limitações.
+- [e2e/README.md](e2e/README.md): instalação e execução isolada dos testes de navegador com Playwright.
 - [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md): instalação reproduzível, variáveis, proteção, atualizações e checklist de produção.
 - [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md): testes executados, persistência e limitações observadas no Preview.
 - [VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md): publicação, separação dos bancos e verificações do domínio público.
