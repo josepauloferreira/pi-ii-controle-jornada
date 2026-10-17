@@ -220,7 +220,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
             const agora = new Date();
             const relogio = document.getElementById("relogio");
             const dataAtual = document.getElementById("dataAtual");
-            if (relogio) relogio.textContent = agora.toLocaleTimeString("pt-BR");
+            if (relogio) relogio.textContent = agora.toLocaleTimeString("pt-BR", { hour12: false });
             if (dataAtual) dataAtual.textContent = agora.toLocaleDateString("pt-BR", {
                 weekday: "long", day: "2-digit", month: "long", year: "numeric"
             });
