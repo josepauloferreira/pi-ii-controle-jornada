@@ -79,6 +79,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             backend/package-lock.json
+            e2e/package-lock.json
 
       - name: Instalar dependências da aplicação
         run: |
