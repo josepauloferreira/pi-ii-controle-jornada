@@ -73,6 +73,11 @@ module.exports = async function apiContract(t, request) {
     assert.equal(body.eventos.length, 1);
     assert.equal(body.eventos[0].horario, data.horario);
     assert.equal(body.alteracoes[0].operacao, 'marcacao');
+    const ativas = await call('/api/jornada/ativa');
+    assert.equal(ativas.status, 200);
+    assert.equal((await ativas.json()).data, data.data);
+    const planos = await (await call('/api/jornada/previstas')).json();
+    assert.deepEqual(planos[data.data], { minutos: 480, origem: 'registrada' });
   });
   await t.test('criação e edição com batidas extras', async () => {
     assert.equal((await call('/api/registros/2026-10-15','PUT',record)).status,201);
@@ -105,6 +110,12 @@ module.exports = async function apiContract(t, request) {
     assert.equal((await call('/api/configuracoes','PUT',settings)).status,200);
     assert.deepEqual(await (await call('/api/configuracoes')).json(),settings);
     assert.equal((await call('/api/configuracoes','PUT',{...settings,jornada:'25:00'})).status,400);
+    const previous = (await (await call('/api/jornada/previstas')).json())['2026-10-15'];
+    assert.deepEqual(previous, { minutos: 480, origem: 'importado' });
+    assert.equal((await call('/api/configuracoes','PUT',{...settings,jornada:'06:00'})).status,200);
+    const after = (await (await call('/api/jornada/previstas')).json())['2026-10-15'];
+    assert.deepEqual(after, previous);
+    assert.equal((await call('/api/configuracoes','PUT',settings)).status,200);
   });
   await t.test('backup inválido preserva registros e configurações', async () => {
     for (const data of [{}, {registros:[]}, {registros:{'2026-02-30':record}}, {registros:{},configuracoes:null}]) assert.equal((await call('/api/backup','PUT',data)).status,400);
@@ -115,6 +126,17 @@ module.exports = async function apiContract(t, request) {
     const backup = {registros:await (await call('/api/registros')).json(),configuracoes:await (await call('/api/configuracoes')).json()};
     assert.equal((await call('/api/backup','PUT',backup)).status,200);
     assert.deepEqual(await (await call('/api/registros')).json(),backup.registros);
+    const backed = {
+      registros: { '2026-09-21': record },
+      configuracoes: { ...settings, jornada: '07:00' },
+      jornadasPrevistas: { '2026-09-21': { minutos: 360, origem: 'registrada' } }
+    };
+    assert.equal((await call('/api/backup','PUT',backed)).status,200);
+    assert.deepEqual((await (await call('/api/jornada/previstas')).json())['2026-09-21'],
+      { minutos: 360, origem: 'importado' });
+    assert.equal((await call('/api/configuracoes')).status,200);
+    assert.equal((await call('/api/backup','PUT',backup)).status,200);
+    assert.equal((await (await call('/api/jornada/previstas')).json())['2026-09-21'].minutos,360);
   });
   await t.test('exclusão de registro', async () => {
     assert.equal((await call('/api/registros/2026-10-15','DELETE')).status,204);
