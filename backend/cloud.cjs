@@ -3,7 +3,7 @@
 // Adaptador da API para Vercel Functions + Turso.
 // O backend local (backend/server.js com better-sqlite3) permanece inalterado.
 const express = require("express");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
 const crypto = require("node:crypto");
 
 const COOKIE_NAME = "meu_ponto_sessao";
@@ -462,7 +462,8 @@ function createCloudApp({ client: suppliedClient } = {}) {
     const ok = registros && typeof registros === "object" && !Array.isArray(registros) &&
       Object.entries(registros).every(([date, record]) => validDate(date) && validRecord(record)) &&
       (configuracoes === undefined || validSettings(configuracoes)) &&
-      justificativaValida(backup?.justificativa);
+      justificativaValida(backup?.justificativa) &&
+      previstasValidas(backup?.jornadasPrevistas, registros);
     if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
 
     const db = req.cloudDb;
@@ -477,7 +478,16 @@ function createCloudApp({ client: suppliedClient } = {}) {
     }]));
     // Operacoes e auditoria participam do mesmo batch transacional.
     const statements = ["DELETE FROM registros"];
-    for (const [date, record] of subsequent) statements.push(saveDay(date, record));
+    for (const [date, record] of subsequent) {
+      statements.push(saveDay(date, record));
+      const minutos = backup.jornadasPrevistas?.[date]?.minutos ??
+        minutosPlanejados(backup.configuracoes?.jornada ??
+          (await db.execute("SELECT jornada FROM configuracoes WHERE id=1")).rows[0].jornada);
+      statements.push(sql(
+        "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?)",
+        [date, minutos, new Date().toISOString()]
+      ));
+    }
     const instante = new Date().toISOString();
     for (const data of new Set([...previous.keys(), ...subsequent.keys()])) {
       const antes = previous.get(data) ?? null;
