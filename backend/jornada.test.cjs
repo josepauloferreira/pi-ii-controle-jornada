@@ -29,6 +29,7 @@ test("sequencia de eventos nao permite saltar ou repetir campos", () => {
   assert.equal(proximoCampo(r), null);
   r.saidaAlmoco = null;
   assert.equal(proximoCampo(r), undefined);
+  assert.equal(proximoCampo({ entrada: "08:00", saidaAlmoco: null, retornoAlmoco: null, saida: "17:00" }), null);
 });
 
 test("motivos vazios e excessivos nao sao justificativas validas", () => {
