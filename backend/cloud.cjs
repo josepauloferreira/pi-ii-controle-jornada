@@ -80,7 +80,8 @@ const SCHEMA = [
   "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) SELECT r.data, CAST(SUBSTR(c.jornada,1,2) AS INTEGER)*60+CAST(SUBSTR(c.jornada,4,2) AS INTEGER), 'legado_estimado', CURRENT_TIMESTAMP FROM registros r CROSS JOIN configuracoes c WHERE c.id=1"
 ];
 
-function createCloudApp({ client: suppliedClient } = {}) {
+function createCloudApp({ client: suppliedClient, now: clock } = {}) {
+  const now = typeof clock === "function" ? clock : () => new Date();
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "2mb" }));
@@ -295,7 +296,7 @@ function createCloudApp({ client: suppliedClient } = {}) {
     "SELECT ?, CAST(SUBSTR(jornada,1,2) AS INTEGER)*60+CAST(SUBSTR(jornada,4,2) AS INTEGER), ?, ? " +
     "FROM configuracoes WHERE id=1", [data, origem, instante]);
 
-  async function diaDaJornada(db, agora = new Date()) {
+  async function diaDaJornada(db, agora = now()) {
     const hoje = horarioDoServidor(agora).data;
     const ontem = diaAnterior(hoje);
     const [atual, anterior, entrada] = await Promise.all([
@@ -327,7 +328,7 @@ function createCloudApp({ client: suppliedClient } = {}) {
     if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
       return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
     }
-    const agora = new Date();
+    const agora = now();
     const { horario, instante } = horarioDoServidor(agora);
     const db = req.cloudDb;
     const data = await diaDaJornada(db, agora);
