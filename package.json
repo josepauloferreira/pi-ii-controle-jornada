@@ -7,7 +7,9 @@
     "dev": "vite --host 0.0.0.0",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
-    "test:cloud": "node --test backend/cloud.test.cjs backend/entry.test.cjs"
+    "test:cloud": "node --test backend/cloud.test.cjs backend/entry.test.cjs",
+    "test:unit": "node --test tests/jornada.test.js",
+    "test:e2e": "npm --prefix e2e test"
   },
   "devDependencies": {
     "vite": "^7.1.0"
