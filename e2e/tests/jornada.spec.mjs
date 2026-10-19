@@ -7,6 +7,7 @@ const senha = "senha-ficticia-e2e-123";
 test.describe.configure({ mode: "serial" });
 
 test("cadastro, registro, edição, extras, downloads e sessão", async ({ page }) => {
+  page.on("dialog", dialog => dialog.accept(dialog.type() === "prompt" ? "Correção necessária durante a validação automatizada." : undefined));
   await page.goto("/");
   await expect(page.locator("#authSubmit")).toHaveText("Criar conta");
   await page.locator("#authUsuario").fill(usuario);
@@ -88,9 +89,10 @@ test("restauração de backup JSON com configurações e registros fictícios", 
   await expect(page.locator("#appView")).toBeVisible();
 
   const data = await page.evaluate(() => {
-    const agora = new Date();
-    return [agora.getFullYear(), String(agora.getMonth() + 1).padStart(2, "0"),
-      String(agora.getDate()).padStart(2, "0")].join("-");
+    const partes = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+      timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit"
+    }).formatToParts(new Date()).map(({type,value}) => [type,value]));
+    return `${partes.year}-${partes.month}-${partes.day}`;
   });
   const backup = {
     versao: 1,
@@ -102,7 +104,7 @@ test("restauração de backup JSON com configurações e registros fictícios", 
       }
     }
   };
-  page.once("dialog", dialog => dialog.accept());
+  page.on("dialog", dialog => dialog.accept(dialog.type() === "prompt" ? "Restauracao ficticia para teste E2E." : undefined));
   await page.locator("#arquivoJSON").setInputFiles({
     name: "backup-ficticio.json", mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify(backup))
