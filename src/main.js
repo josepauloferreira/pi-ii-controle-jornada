@@ -318,7 +318,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 console.error("Falha ao carregar dados do banco de dados:", erro);
                 mostrarMensagem("Não foi possível carregar os dados do servidor. Confira sua conexão e tente novamente.");
             } finally {
-                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataHoje()] || null);
             }
         }
 
@@ -474,7 +474,7 @@ async function baterPonto() {
                 mostrarMensagem(erro.message || "Falha ao registrar ponto. Tente novamente.");
             } finally {
                 registrandoPonto = false;
-                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataHoje()] || null);
             }
         }
 
@@ -535,6 +535,10 @@ async function baterPonto() {
             const trabalhado = minutosTrabalhados(registro);
             document.getElementById("horasHoje").textContent = formatarDuracao(trabalhado);
             document.getElementById("jornadaHoje").textContent = formatarDuracao(jornada);
+            const botaoPonto = document.getElementById("btnBaterPonto");
+            const encerrada = jornadaConcluida(registro);
+            botaoPonto.disabled = !pontoServidorPronto || registrandoPonto || encerrada;
+            botaoPonto.textContent = encerrada ? "Jornada concluída" : "Registrar ponto";
             const saldo = document.getElementById("saldoHoje");
             const diferenca = saldoCalculado(registro, jornada);
             saldo.textContent = saldoDaJornada(registro, jornada);
