@@ -27,6 +27,29 @@ db.exec(`
   INSERT OR IGNORE INTO configuracoes (id) VALUES (1);
 `);
 
+// Migracao aditiva: registros legados permanecem intactos e nao sao apresentados
+// como marcacoes originadas no servidor.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS marcacoes_servidor (
+    data TEXT NOT NULL,
+    campo TEXT NOT NULL CHECK(campo IN ('entrada','saidaAlmoco','retornoAlmoco','saida')),
+    horario TEXT NOT NULL,
+    instante TEXT NOT NULL,
+    PRIMARY KEY (data, campo)
+  );
+
+  CREATE TABLE IF NOT EXISTS registro_auditoria (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    data TEXT NOT NULL,
+    operacao TEXT NOT NULL CHECK(operacao IN ('marcacao','correcao','exclusao','restauracao')),
+    antes TEXT,
+    depois TEXT,
+    justificativa TEXT NOT NULL,
+    instante TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS registro_auditoria_data ON registro_auditoria(data, id);
+`);
+
 // As tabelas de ponto existentes permanecem inalteradas.
 db.exec(`
   CREATE TABLE IF NOT EXISTS conta (
