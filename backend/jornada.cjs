@@ -65,4 +65,15 @@ function minutosPlanejados(hhmm) {
   return horas * 60 + minutos;
 }
 
-module.exports = { CAMPOS, FUSO, horarioDoServidor, proximoCampo, justificativaValida, registroVazio, diaAnterior, resolverDataJornada, minutosPlanejados };
+function previstasValidas(previstas, registros) {
+  if (previstas === undefined) return true; // backups v1 continuam aceitos
+  if (!previstas || typeof previstas !== "object" || Array.isArray(previstas)) return false;
+  return Object.entries(previstas).every(([data, plano]) =>
+    Object.hasOwn(registros, data) &&
+    plano && typeof plano === "object" && !Array.isArray(plano) &&
+    Number.isInteger(plano.minutos) && plano.minutos >= 0 && plano.minutos <= 1439 &&
+    (plano.origem === undefined || ["registrada", "legado_estimado", "importado"].includes(plano.origem))
+  );
+}
+
+module.exports = { CAMPOS, FUSO, horarioDoServidor, proximoCampo, justificativaValida, registroVazio, diaAnterior, resolverDataJornada, minutosPlanejados, previstasValidas };
