@@ -200,12 +200,28 @@ const STORAGE_PONTO = "meu_ponto_registros";
             return requisitarAPI(`/api/registros/${data}`, opcoes);
         }
 
-        function salvarRegistroNoServidor(data, registro) {
+        function salvarRegistroNoServidor(data, registro, justificativa) {
             return requisitarRegistro(data, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(registro)
+                body: JSON.stringify({ ...registro, justificativa })
             });
+        }
+
+        function solicitarJustificativa() {
+            const motivo = window.prompt(
+                "Por que você precisa corrigir ou excluir este registro? Informe ao menos 10 caracteres."
+            );
+            if (motivo === null) {
+                mostrarMensagem("Operação cancelada.");
+                return null;
+            }
+            const texto = motivo.trim();
+            if (texto.length < 10 || texto.length > 500) {
+                mostrarMensagem("A justificativa precisa ter entre 10 e 500 caracteres.");
+                return null;
+            }
+            return texto;
         }
 
         function exportarBackupLocal() {
@@ -256,7 +272,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                             try {
                                 // Não sobrescreve dias que possam ter sido criados no servidor.
                                 const atual = await requisitarRegistro(data);
-                                if (!atual) await salvarRegistroNoServidor(data, locais[data]);
+                                if (!atual) await salvarRegistroNoServidor(data, locais[data], "Importação de registros anteriores do navegador");
                             } catch (erroMigracao) {
                                 console.warn("Não foi possível migrar um dia local:", data, erroMigracao);
                                 falhas++;
@@ -368,8 +384,11 @@ const STORAGE_PONTO = "meu_ponto_registros";
 
 
         function dataHoje() {
-            const agora = new Date();
-            return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+            const partes = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+                timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit",
+                day: "2-digit"
+            }).formatToParts(new Date()).map(({ type, value }) => [type, value]));
+            return `${partes.year}-${partes.month}-${partes.day}`;
         }
 
         function formatarData(data) {
@@ -438,28 +457,24 @@ async function baterPonto() {
                 mostrarMensagem("Aguarde a conexão com o servidor para bater ponto.");
                 return;
             }
-
-            const data = dataHoje();
-            const registro = registros[data]
-                ? structuredClone(registros[data])
-                : { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
-            const horario = new Date().toTimeString().slice(0, 5);
-            const proximoCampo = CAMPOS_PONTO.find(campo => !registro[campo]);
-            if (proximoCampo) registro[proximoCampo] = horario;
-            else registro.extras.push({ horario, descricao: "Batida extra" });
-
             registrandoPonto = true;
             document.getElementById("btnBaterPonto").disabled = true;
             try {
-                registros[data] = await salvarRegistroNoServidor(data, registro);
+                // Nao aceita horario nem proximo campo vindos do navegador.
+                const resposta = await requisitarAPI("/api/jornada/marcar", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}"
+                });
+                registros[resposta.data] = resposta.registro;
                 atualizarTela();
-                mostrarMensagem(`Ponto registrado às ${horario} no banco de dados.`);
+                mostrarMensagem(`Ponto registrado pelo servidor às ${resposta.horario}.`);
             } catch (erro) {
                 console.error("Não foi possível registrar o ponto:", erro);
-                mostrarMensagem("Falha ao salvar o ponto no banco de dados. Tente novamente.");
+                mostrarMensagem(erro.message || "Falha ao registrar ponto. Tente novamente.");
             } finally {
                 registrandoPonto = false;
-                document.getElementById("btnBaterPonto").disabled = false;
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
             }
         }
 
@@ -468,9 +483,18 @@ async function baterPonto() {
                 mostrarMensagem("Aguarde o carregamento do servidor.");
                 return false;
             }
+            const justificativa = solicitarJustificativa();
+            if (!justificativa) return false;
             try {
-                if (registros[data]) registros[data] = await salvarRegistroNoServidor(data, registros[data]);
-                else await requisitarRegistro(data, { method: "DELETE" });
+                if (registros[data]) {
+                    registros[data] = await salvarRegistroNoServidor(data, registros[data], justificativa);
+                } else {
+                    await requisitarRegistro(data, {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ justificativa })
+                    });
+                }
                 return true;
             } catch (erro) {
                 console.error("Falha ao salvar registros no banco de dados:", erro);
@@ -878,10 +902,13 @@ async function baterPonto() {
                     " e as configurações presentes no arquivo. Baixe primeiro um backup atual. Continuar?"
                 )) return;
 
+                const justificativa = solicitarJustificativa();
+                if (!justificativa) return;
                 await requisitarAPI("/api/backup", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
+                        justificativa,
                         registros: conteudo.registros,
                         ...(conteudo.configuracoes ? { configuracoes: conteudo.configuracoes } : {})
                     })
