@@ -3,6 +3,7 @@
 // Adaptador da API para Vercel Functions + Turso.
 // O backend local (backend/server.js com better-sqlite3) permanece inalterado.
 const express = require("express");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
 const crypto = require("node:crypto");
 
 const COOKIE_NAME = "meu_ponto_sessao";
@@ -71,10 +72,16 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS conta (id INTEGER PRIMARY KEY CHECK(id = 1), usuario TEXT NOT NULL COLLATE NOCASE UNIQUE, senha_hash TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessoes_conta (token_hash TEXT PRIMARY KEY, csrf_token TEXT NOT NULL, expira_em INTEGER NOT NULL)",
   "CREATE INDEX IF NOT EXISTS sessoes_conta_expiracao ON sessoes_conta(expira_em)",
-  "CREATE TABLE IF NOT EXISTS login_tentativas (chave TEXT PRIMARY KEY, quantidade INTEGER NOT NULL, expira_em INTEGER NOT NULL)"
+  "CREATE TABLE IF NOT EXISTS login_tentativas (chave TEXT PRIMARY KEY, quantidade INTEGER NOT NULL, expira_em INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS marcacoes_servidor (data TEXT NOT NULL, campo TEXT NOT NULL CHECK(campo IN ('entrada','saidaAlmoco','retornoAlmoco','saida')), horario TEXT NOT NULL, instante TEXT NOT NULL, PRIMARY KEY(data,campo))",
+  "CREATE TABLE IF NOT EXISTS registro_auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, operacao TEXT NOT NULL CHECK(operacao IN ('marcacao','correcao','exclusao','restauracao')), antes TEXT, depois TEXT, justificativa TEXT NOT NULL, instante TEXT NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS registro_auditoria_data ON registro_auditoria(data, id)",
+  "CREATE TABLE IF NOT EXISTS jornada_prevista_dia (data TEXT PRIMARY KEY, minutos INTEGER NOT NULL CHECK(minutos BETWEEN 0 AND 1439), origem TEXT NOT NULL CHECK(origem IN ('registrada','legado_estimado','importado')), definido_em TEXT NOT NULL)",
+  "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) SELECT r.data, CAST(SUBSTR(c.jornada,1,2) AS INTEGER)*60+CAST(SUBSTR(c.jornada,4,2) AS INTEGER), 'legado_estimado', CURRENT_TIMESTAMP FROM registros r CROSS JOIN configuracoes c WHERE c.id=1"
 ];
 
-function createCloudApp({ client: suppliedClient } = {}) {
+function createCloudApp({ client: suppliedClient, now: clock } = {}) {
+  const now = typeof clock === "function" ? clock : () => new Date();
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "2mb" }));
@@ -284,6 +291,98 @@ function createCloudApp({ client: suppliedClient } = {}) {
           horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
         })))]);
   }
+  const congelarPrevista = (data, origem, instante) => sql(
+    "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) " +
+    "SELECT ?, CAST(SUBSTR(jornada,1,2) AS INTEGER)*60+CAST(SUBSTR(jornada,4,2) AS INTEGER), ?, ? " +
+    "FROM configuracoes WHERE id=1", [data, origem, instante]);
+
+  async function diaDaJornada(db, agora = now()) {
+    const hoje = horarioDoServidor(agora).data;
+    const ontem = diaAnterior(hoje);
+    const [atual, anterior, entrada] = await Promise.all([
+      db.execute(sql("SELECT * FROM registros WHERE data = ?", [hoje])),
+      db.execute(sql("SELECT * FROM registros WHERE data = ?", [ontem])),
+      db.execute(sql("SELECT instante FROM marcacoes_servidor WHERE data = ? AND campo='entrada'", [ontem]))
+    ]);
+    return resolverDataJornada(agora,
+      atual.rows[0] ? recordRow(atual.rows[0]) : null,
+      anterior.rows[0] ? recordRow(anterior.rows[0]) : null,
+      entrada.rows[0]?.instante);
+  }
+
+  app.get("/api/jornada/ativa", async (req, res) => {
+    const db = req.cloudDb;
+    const data = await diaDaJornada(db);
+    const result = await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]));
+    res.json({ data, registro: result.rows[0] ? recordRow(result.rows[0]) : registroVazio() });
+  });
+
+  app.get("/api/jornada/previstas", async (req, res) => {
+    const result = await req.cloudDb.execute("SELECT data, minutos, origem FROM jornada_prevista_dia ORDER BY data");
+    const previstas = {};
+    for (const { data, minutos, origem } of result.rows) previstas[data] = { minutos: Number(minutos), origem };
+    res.json(previstas);
+  });
+
+  app.post("/api/jornada/marcar", async (req, res) => {
+    if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
+      return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
+    }
+    const agora = now();
+    const { horario, instante } = horarioDoServidor(agora);
+    const db = req.cloudDb;
+    const data = await diaDaJornada(db, agora);
+    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+    const antigo = anterior ? recordRow(anterior) : registroVazio();
+    const campo = proximoCampo(antigo);
+    if (campo === undefined) return res.status(409).json({ erro: "Jornada anterior inconsistente. Utilize correção justificada." });
+    if (campo === null) return res.status(409).json({ erro: "As quatro marcações da jornada já foram realizadas." });
+
+    const ultima = (await db.execute(sql(
+      "SELECT instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante DESC LIMIT 1", [data]
+    ))).rows[0];
+    if (ultima && Date.parse(instante) - Date.parse(ultima.instante) < 60_000) {
+      return res.status(409).json({ erro: "Aguarde pelo menos um minuto entre marcações." });
+    }
+    const novo = { ...antigo, [campo]: horario };
+    try {
+      await db.batch([
+        sql("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)",
+          [data, campo, horario, instante]),
+        saveDay(data, novo),
+        congelarPrevista(data, "registrada", instante),
+        sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)",
+          [data, JSON.stringify(antigo), JSON.stringify(novo), "Marcação automática pelo servidor", instante])
+      ], "write");
+    } catch (error) {
+      if (/UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(String(error.message))) {
+        return res.status(409).json({ erro: "Marcação já registrada. Atualize a página." });
+      }
+      throw error;
+    }
+    const prevista = (await db.execute(sql("SELECT minutos, origem FROM jornada_prevista_dia WHERE data=?", [data]))).rows[0];
+    res.status(201).json({ data, campo, horario, instante, registro: novo,
+      jornadaPrevista: { minutos: Number(prevista.minutos), origem: prevista.origem } });
+  });
+
+  app.get("/api/jornada/historico/:data", async (req, res) => {
+    const { data } = req.params;
+    if (!validDate(data)) return res.status(400).json({ erro: "Data inválida." });
+    const db = req.cloudDb;
+    const [eventos, alteracoes] = await Promise.all([
+      db.execute(sql("SELECT campo, horario, instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante", [data])),
+      db.execute(sql("SELECT id, operacao, antes, depois, justificativa, instante FROM registro_auditoria WHERE data = ? ORDER BY id", [data]))
+    ]);
+    res.json({
+      data, eventos: eventos.rows,
+      alteracoes: alteracoes.rows.map(item => ({
+        ...item, antes: item.antes ? JSON.parse(item.antes) : null,
+        depois: item.depois ? JSON.parse(item.depois) : null
+      })),
+      origem: eventos.rows.length ? "servidor" : "legado_ou_importado"
+    });
+  });
+
   app.get("/api/registros", async (req, res) => {
     const mes = req.query.mes;
     if (mes !== undefined && (typeof mes !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(mes))) {
@@ -307,17 +406,39 @@ function createCloudApp({ client: suppliedClient } = {}) {
     const { data } = req.params;
     if (!validDate(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
     if (!validRecord(req.body)) return res.status(400).json({ erro: "Registro inválido. Informe os quatro horários (HH:mm ou null) e a lista extras." });
+    if (!justificativaValida(req.body.justificativa)) {
+      return res.status(400).json({ erro: "Informe a justificativa da correção (10 a 500 caracteres)." });
+    }
     const db = req.cloudDb;
-    const existed = (await db.execute(sql("SELECT 1 FROM registros WHERE data = ?", [data]))).rows.length > 0;
-    await db.execute(saveDay(data, req.body));
-    const row = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
-    res.status(existed ? 200 : 201).json(recordRow(row));
+    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+    const novo = { entrada: req.body.entrada, saidaAlmoco: req.body.saidaAlmoco,
+      retornoAlmoco: req.body.retornoAlmoco, saida: req.body.saida,
+      extras: req.body.extras.map(extra => ({
+        horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
+      })) };
+    await db.batch([
+      saveDay(data, novo),
+      congelarPrevista(data, "importado", new Date().toISOString()),
+      sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'correcao', ?, ?, ?, ?)",
+        [data, anterior ? JSON.stringify(recordRow(anterior)) : "null", JSON.stringify(novo),
+          req.body.justificativa.trim(), new Date().toISOString()])
+    ], "write");
+    res.status(anterior ? 200 : 201).json(novo);
   });
   app.delete("/api/registros/:data", async (req, res) => {
     const { data } = req.params;
     if (!validDate(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
-    const result = await req.cloudDb.execute(sql("DELETE FROM registros WHERE data = ?", [data]));
-    if (!result.rowsAffected) return res.status(404).json({ erro: "Registro não encontrado." });
+    if (!justificativaValida(req.body?.justificativa)) {
+      return res.status(400).json({ erro: "Informe justificativa para a exclusão (10 a 500 caracteres)." });
+    }
+    const db = req.cloudDb;
+    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+    if (!anterior) return res.status(404).json({ erro: "Registro não encontrado." });
+    await db.batch([
+      sql("DELETE FROM registros WHERE data = ?", [data]),
+      sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'exclusao', ?, NULL, ?, ?)",
+        [data, JSON.stringify(recordRow(anterior)), req.body.justificativa.trim(), new Date().toISOString()])
+    ], "write");
     res.status(204).end();
   });
   app.get("/api/configuracoes", async (req, res) => {
@@ -341,15 +462,48 @@ function createCloudApp({ client: suppliedClient } = {}) {
     const configuracoes = backup?.configuracoes;
     const ok = registros && typeof registros === "object" && !Array.isArray(registros) &&
       Object.entries(registros).every(([date, record]) => validDate(date) && validRecord(record)) &&
-      (configuracoes === undefined || validSettings(configuracoes));
-    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros e configurações." });
-    // Uma transacao atomica garante rollback completo se algum item falhar.
+      (configuracoes === undefined || validSettings(configuracoes)) &&
+      justificativaValida(backup?.justificativa) &&
+      previstasValidas(backup?.jornadasPrevistas, registros);
+    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
+
+    const db = req.cloudDb;
+    const anteriores = await db.execute("SELECT * FROM registros ORDER BY data");
+    const previous = new Map(anteriores.rows.map(row => [row.data, recordRow(row)]));
+    const subsequent = new Map(Object.entries(registros).map(([data, record]) => [data, {
+      entrada: record.entrada, saidaAlmoco: record.saidaAlmoco,
+      retornoAlmoco: record.retornoAlmoco, saida: record.saida,
+      extras: record.extras.map(extra => ({
+        horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
+      }))
+    }]));
+    // Operacoes e auditoria participam do mesmo batch transacional.
     const statements = ["DELETE FROM registros"];
-    for (const [date, record] of Object.entries(registros)) statements.push(saveDay(date, record));
+    for (const [date, record] of subsequent) {
+      statements.push(saveDay(date, record));
+      const minutos = backup.jornadasPrevistas?.[date]?.minutos ??
+        minutosPlanejados(backup.configuracoes?.jornada ??
+          (await db.execute("SELECT jornada FROM configuracoes WHERE id=1")).rows[0].jornada);
+      statements.push(sql(
+        "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?)",
+        [date, minutos, new Date().toISOString()]
+      ));
+    }
+    const instante = new Date().toISOString();
+    for (const data of new Set([...previous.keys(), ...subsequent.keys()])) {
+      const antes = previous.get(data) ?? null;
+      const depois = subsequent.get(data) ?? null;
+      if (JSON.stringify(antes) !== JSON.stringify(depois)) {
+        statements.push(sql(
+          "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'restauracao', ?, ?, ?, ?)",
+          [data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), instante]
+        ));
+      }
+    }
     if (configuracoes) statements.push(sql(
       "UPDATE configuracoes SET nome = ?, jornada = ?, inicioSemana = ? WHERE id = 1",
       [configuracoes.nome, configuracoes.jornada, configuracoes.inicioSemana]));
-    await req.cloudDb.batch(statements, "write");
+    await db.batch(statements, "write");
     res.json({ registros: Object.keys(registros).length });
   });
   app.use((error, _req, res, _next) => {

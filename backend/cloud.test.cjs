@@ -56,7 +56,7 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
     assert.equal((await request("/api/configuracoes", { method: "PUT", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({nome:"x",jornada:"08:00",inicioSemana:"1"}) })).status, 403);
 
     const record = { entrada: "08:30", saidaAlmoco: "12:00", retornoAlmoco: "13:00", saida: "18:30", extras: [] };
-    response = await request("/api/registros/2026-10-15", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify(record) });
+    response = await request("/api/registros/2026-10-15", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify({ ...record, justificativa: "Correção fictícia validada nos testes." }) });
     assert.equal(response.status, 201);
     assert.equal((await response.json()).saida, "18:30");
     assert.equal((await request("/api/registros?mes=2026-10", { headers: getAuth(cookie) }).then(r => r.json()))["2026-10-15"].saida, "18:30");
@@ -66,7 +66,7 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
     assert.equal((await request("/api/registros/2026-10-15", { headers: getAuth(cookie) })).status, 200);
 
     const backup = { registros: { "2026-10-16": record }, configuracoes: {nome:"Conta Pessoal",jornada:"08:00",inicioSemana:"1"} };
-    assert.equal((await request("/api/backup", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify(backup) })).status, 200);
+    assert.equal((await request("/api/backup", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify({ ...backup, justificativa: "Restauração fictícia validada nos testes." }) })).status, 200);
     assert.equal((await request("/api/registros/2026-10-15", { headers: getAuth(cookie) })).status, 404);
     assert.equal((await request("/api/configuracoes", { headers: getAuth(cookie) }).then(r => r.json())).nome, "Conta Pessoal");
 
@@ -101,6 +101,95 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
   }
 });
 
+test("migração conserva registros antigos e congela jornada estimada apenas uma vez", async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "jornada-legado-"));
+  const client = createClient({ url: "file:" + path.join(folder, "test.db") });
+  let server;
+  try {
+    await client.batch([
+      "CREATE TABLE registros (data TEXT PRIMARY KEY, entrada TEXT, saidaAlmoco TEXT, retornoAlmoco TEXT, saida TEXT, extras TEXT NOT NULL DEFAULT '[]')",
+      "CREATE TABLE configuracoes (id INTEGER PRIMARY KEY CHECK(id=1), nome TEXT NOT NULL DEFAULT '', jornada TEXT NOT NULL DEFAULT '08:00', inicioSemana TEXT NOT NULL DEFAULT '1')",
+      "INSERT INTO configuracoes (id, jornada) VALUES (1, '07:30')",
+      "INSERT INTO registros (data, entrada, saida, extras) VALUES ('2026-09-15', '08:00', '15:30', '[]')"
+    ], "write");
+    server = createCloudApp({ client }).listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
+    assert.equal(res.status, 200);
+    const read = () => client.execute("SELECT minutos, origem FROM jornada_prevista_dia WHERE data='2026-09-15'");
+    assert.deepEqual({ ...((await read()).rows[0]) }, { minutos: 450, origem: "legado_estimado" });
+    await client.execute("UPDATE configuracoes SET jornada = '06:00' WHERE id = 1");
+    await client.batch([
+      "INSERT OR IGNORE INTO configuracoes (id) VALUES (1)",
+      "INSERT OR IGNORE INTO jornada_prevista_dia (data,minutos,origem,definido_em) SELECT data,360,'legado_estimado',CURRENT_TIMESTAMP FROM registros"
+    ],"write");
+    assert.equal(Number((await read()).rows[0].minutos), 450);
+    assert.equal((await client.execute("SELECT entrada FROM registros WHERE data='2026-09-15'")).rows[0].entrada,"08:00");
+  } finally {
+    if (server) await new Promise(resolve => server.close(resolve));
+    client.close();
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("HTTP libSQL: expediente iniciado antes da meia-noite termina no mesmo dia", async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "jornada-noturna-"));
+  const client = createClient({ url: "file:" + path.join(folder, "test.db") });
+  let clock = new Date("2026-10-19T02:45:00.000Z"); // 18/10 às 23:45 em São Paulo
+  const server = createCloudApp({ client, now: () => clock }).listen(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const url = "http://127.0.0.1:" + server.address().port;
+    const send = (path, method = "GET", data, cookie, csrf) => fetch(url + path, {
+      method, headers: {
+        ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(cookie ? { Cookie: cookie, "X-CSRF-Token": csrf } : {})
+      },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) })
+    });
+    const reg = await send("/api/auth/register", "POST", {
+      usuario: "noturno.teste", senha: "senha-noturna-ficticia-123",
+      confirmarSenha: "senha-noturna-ficticia-123"
+    });
+    assert.equal(reg.status, 200);
+    const cookie = reg.headers.get("set-cookie").split(";")[0];
+    const { csrfToken: csrf } = await reg.json();
+    const marcar = async (expected) => {
+      const r = await send("/api/jornada/marcar", "POST", {}, cookie, csrf);
+      assert.equal(r.status, 201);
+      const body = await r.json();
+      assert.equal(body.data, "2026-10-18");
+      assert.equal(body.campo, expected);
+      assert.equal(body.jornadaPrevista.minutos, 480);
+      return body;
+    };
+    const first = await marcar("entrada");
+    assert.equal(first.horario, "23:45");
+    clock = new Date("2026-10-19T04:00:00.000Z"); // 01:00
+    assert.equal((await (await send("/api/jornada/ativa", "GET", undefined, cookie, csrf)).json()).data, "2026-10-18");
+    const second = await marcar("saidaAlmoco");
+    assert.equal(second.horario, "01:00");
+    clock = new Date("2026-10-19T04:45:00.000Z"); // 01:45
+    await marcar("retornoAlmoco");
+    clock = new Date("2026-10-19T09:00:00.000Z"); // 06:00
+    await marcar("saida");
+    const day = await (await send("/api/registros/2026-10-18", "GET", undefined, cookie, csrf)).json();
+    assert.deepEqual([day.entrada, day.saidaAlmoco, day.retornoAlmoco, day.saida],
+      ["23:45","01:00","01:45","06:00"]);
+    assert.equal((await (await send("/api/jornada/ativa", "GET", undefined, cookie, csrf)).json()).data, "2026-10-19");
+    const config = { nome: "Noturno", jornada: "06:00", inicioSemana: "1" };
+    assert.equal((await send("/api/configuracoes", "PUT", config, cookie, csrf)).status, 200);
+    const plans = await (await send("/api/jornada/previstas", "GET", undefined, cookie, csrf)).json();
+    assert.deepEqual(plans["2026-10-18"], { minutos: 480, origem: "registrada" });
+    const eventos = await (await send("/api/jornada/historico/2026-10-18", "GET", undefined, cookie, csrf)).json();
+    assert.equal(eventos.eventos.length, 4);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    client.close();
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test('contrato completo: libSQL em arquivo temporário', async t => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(),'jornada-cloud-contract-'));
   const client = createClient({url:'file:'+path.join(folder,'test.db')});
@@ -124,7 +213,11 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
   }};
   const servers=[createCloudApp({client:clients[0]}).listen(0,'127.0.0.1'),createCloudApp({client:wrapped}).listen(0,'127.0.0.1')];
   const request=(i,route,method='GET',data,session,csrf=true)=>fetch(`http://127.0.0.1:${servers[i].address().port}${route}`,{
-    method,headers:{'Content-Type':'application/json',...(session?{Cookie:session.cookie,...(csrf?{'X-CSRF-Token':session.csrf}:{})}:{}),'X-Forwarded-Proto':'https'},...(data===undefined?{}:{body:JSON.stringify(data)})
+    method,headers:{'Content-Type':'application/json',...(session?{Cookie:session.cookie,...(csrf?{'X-CSRF-Token':session.csrf}:{})}:{}),'X-Forwarded-Proto':'https'},
+    ...(data===undefined?{}:{body:JSON.stringify(
+      ((method==='PUT' && /^\/api\/(registros\/|backup$)/.test(route)) || (method==='DELETE' && route.startsWith('/api/registros/')))
+        ? {...data, justificativa: 'Alteração fictícia testada com auditoria.'} : data
+    )})
   });
   const user={usuario:'instancias.teste',senha:'senha-ficticia-instancias-123'};
   const record={entrada:'08:00',saidaAlmoco:null,retornoAlmoco:null,saida:'18:30',extras:[]};
@@ -145,15 +238,30 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
       assert.equal((await request(0,'/api/registros/2026-10-17','PUT',record,session)).status,201);
       assert.deepEqual(await (await request(1,'/api/registros/2026-10-17','GET',undefined,session)).json(),record);
     });
+    await t.test('marcacoes simultaneas em duas instancias nao duplicam eventos',async()=>{
+      const responses = await Promise.all([
+        request(0,'/api/jornada/marcar','POST',{},session),
+        request(1,'/api/jornada/marcar','POST',{},session)
+      ]);
+      assert.deepEqual(responses.map(r=>r.status).sort(),[201,409]);
+      const dia = (await responses.find(r=>r.status===201).json()).data;
+      const eventos = await clients[0].execute({
+        sql: 'SELECT COUNT(*) AS total FROM marcacoes_servidor WHERE data = ?', args:[dia]
+      });
+      assert.equal(Number(eventos.rows[0].total),1);
+      const history = await request(1,'/api/jornada/historico/'+dia,'GET',undefined,session);
+      assert.equal(history.status,200);
+      assert.equal((await history.json()).eventos.length,1);
+    });
     await t.test('rollback de backup após falha real no meio da transação',async()=>{
       await clients[0].execute("CREATE TRIGGER rejeitar_teste BEFORE INSERT ON registros WHEN NEW.data = '2026-10-18' BEGIN SELECT RAISE(ABORT, 'teste privado'); END");
       const old=console.error; const logs=[];console.error=(...args)=>logs.push(args.join(' '));
       let r;
-      try {r=await request(1,'/api/backup','PUT',{registros:{'2026-10-19':record,'2026-10-18':record},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
+      try {r=await request(1,'/api/backup','PUT',{registros:{'2099-01-01':record,'2026-10-18':record},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
       assert.equal(r.status,503); assert.ok(!(await r.text()).includes('teste privado'));
       assert.ok(logs.every(line=>!line.includes('teste privado')));
       assert.equal((await request(0,'/api/registros/2026-10-17','GET',undefined,session)).status,200);
-      assert.equal((await request(0,'/api/registros/2026-10-19','GET',undefined,session)).status,404);
+      assert.equal((await request(0,'/api/registros/2099-01-01','GET',undefined,session)).status,404);
       assert.equal((await (await request(0,'/api/configuracoes','GET',undefined,session)).json()).jornada,'08:00');
       await clients[0].execute('DROP TRIGGER rejeitar_teste');
     });

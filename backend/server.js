@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const db = require("./database");
 const { configureAuth } = require("./auth");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
 
 const app = express();
 const porta = Number(process.env.PORT) || 3000;
@@ -83,6 +84,103 @@ app.use("/api", (req, res, next) => {
   next();
 });
 
+// Marcações normais são originadas no servidor, jamais no relógio do navegador.
+// A transação serializa leitura do estado, inclusão do evento e projeção do dia.
+const buscarPrevista = db.prepare("SELECT minutos, origem FROM jornada_prevista_dia WHERE data = ?");
+const congelarPrevista = db.prepare(
+  "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) " +
+  "SELECT ?, CAST(SUBSTR(jornada,1,2) AS INTEGER)*60 + CAST(SUBSTR(jornada,4,2) AS INTEGER), ?, ? " +
+  "FROM configuracoes WHERE id=1"
+);
+const buscarEntradaOriginal = db.prepare(
+  "SELECT instante FROM marcacoes_servidor WHERE data = ? AND campo = 'entrada'"
+);
+
+function diaDaJornada(agora = new Date()) {
+  const hoje = horarioDoServidor(agora).data;
+  const anterior = diaAnterior(hoje);
+  const atual = buscarDia.get(hoje);
+  const ontem = buscarDia.get(anterior);
+  const entrada = buscarEntradaOriginal.get(anterior);
+  return resolverDataJornada(agora, atual && converterRegistro(atual),
+    ontem && converterRegistro(ontem), entrada?.instante);
+}
+
+app.get("/api/jornada/ativa", (_req, res) => {
+  const data = diaDaJornada();
+  const row = buscarDia.get(data);
+  res.json({ data, registro: row ? converterRegistro(row) : registroVazio() });
+});
+
+app.get("/api/jornada/previstas", (_req, res) => {
+  const previstas = {};
+  for (const { data, minutos, origem } of db.prepare(
+    "SELECT data, minutos, origem FROM jornada_prevista_dia ORDER BY data"
+  ).all()) previstas[data] = { minutos, origem };
+  res.json(previstas);
+});
+
+const registrarMarcacao = db.transaction(() => {
+  const agora = new Date();
+  const { horario, instante } = horarioDoServidor(agora);
+  const data = diaDaJornada(agora);
+  const anterior = buscarDia.get(data);
+  const antigo = anterior ? converterRegistro(anterior) : registroVazio();
+  const campo = proximoCampo(antigo);
+  if (campo === undefined) return { erro: "Jornada anterior inconsistente. Utilize correção justificada.", status: 409 };
+  if (campo === null) return { erro: "As quatro marcações da jornada já foram realizadas.", status: 409 };
+
+  const ultimo = db.prepare(
+    "SELECT instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante DESC LIMIT 1"
+  ).get(data);
+  if (ultimo && Date.parse(instante) - Date.parse(ultimo.instante) < 60_000) {
+    return { erro: "Aguarde pelo menos um minuto entre marcações.", status: 409 };
+  }
+
+  db.prepare("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)")
+    .run(data, campo, horario, instante);
+  const atualizado = { ...antigo, [campo]: horario };
+  salvarDia.run(data, atualizado.entrada, atualizado.saidaAlmoco,
+    atualizado.retornoAlmoco, atualizado.saida, JSON.stringify(atualizado.extras));
+  congelarPrevista.run(data, "registrada", instante);
+  db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)"
+  ).run(data, JSON.stringify(antigo), JSON.stringify(atualizado), "Marcação automática pelo servidor", instante);
+  return { data, campo, horario, instante, registro: atualizado, jornadaPrevista: buscarPrevista.get(data) };
+});
+
+app.post("/api/jornada/marcar", (req, res) => {
+  if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
+    return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
+  }
+  try {
+    const resultado = registrarMarcacao();
+    if (resultado.status) return res.status(resultado.status).json({ erro: resultado.erro });
+    return res.status(201).json(resultado);
+  } catch (erro) {
+    if (erro.code?.startsWith("SQLITE_CONSTRAINT")) {
+      return res.status(409).json({ erro: "Marcação já registrada. Atualize a página." });
+    }
+    throw erro;
+  }
+});
+
+app.get("/api/jornada/historico/:data", (req, res) => {
+  const { data } = req.params;
+  if (!dataValida(data)) return res.status(400).json({ erro: "Data inválida." });
+  const eventos = db.prepare(
+    "SELECT campo, horario, instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante"
+  ).all(data);
+  const alteracoes = db.prepare(
+    "SELECT id, operacao, antes, depois, justificativa, instante FROM registro_auditoria WHERE data = ? ORDER BY id"
+  ).all(data).map(item => ({
+    ...item,
+    antes: item.antes ? JSON.parse(item.antes) : null,
+    depois: item.depois ? JSON.parse(item.depois) : null
+  }));
+  res.json({ data, eventos, alteracoes, origem: eventos.length ? "servidor" : "legado_ou_importado" });
+});
+
 app.get("/api/registros", (req, res) => {
   const mes = req.query.mes;
   if (mes !== undefined && (typeof mes !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(mes))) {
@@ -104,30 +202,56 @@ app.get("/api/registros/:data", (req, res) => {
   res.json(converterRegistro(linha));
 });
 
+// Edicoes manuais devem preservar a versao anterior e a justificativa.
+const alterarRegistro = db.transaction((data, registro, justificativa) => {
+  const antes = buscarDia.get(data);
+  const anterior = antes ? converterRegistro(antes) : null;
+  const extras = registro.extras.map(extra => ({
+    horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
+  }));
+  const novo = { entrada: registro.entrada, saidaAlmoco: registro.saidaAlmoco,
+    retornoAlmoco: registro.retornoAlmoco, saida: registro.saida, extras };
+  salvarDia.run(data, novo.entrada, novo.saidaAlmoco, novo.retornoAlmoco,
+    novo.saida, JSON.stringify(novo.extras));
+  congelarPrevista.run(data, "importado", new Date().toISOString());
+  db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'correcao', ?, ?, ?, ?)"
+  ).run(data, JSON.stringify(anterior), JSON.stringify(novo), justificativa.trim(), new Date().toISOString());
+  return { criado: !antes, novo };
+});
+
 app.put("/api/registros/:data", (req, res) => {
   const { data } = req.params;
   if (!dataValida(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
   if (!registroValido(req.body)) {
     return res.status(400).json({ erro: "Registro inválido. Informe os quatro horários (HH:mm ou null) e a lista extras." });
   }
+  if (!justificativaValida(req.body.justificativa)) {
+    return res.status(400).json({ erro: "Informe a justificativa da correção (10 a 500 caracteres)." });
+  }
+  const resultado = alterarRegistro(data, req.body, req.body.justificativa);
+  res.status(resultado.criado ? 201 : 200).json(resultado.novo);
+});
 
-  const novo = !buscarDia.get(data);
-  const registro = req.body;
-  const extras = registro.extras.map(extra => ({
-    horario: extra.horario,
-    descricao: extra.descricao ?? "Batida extra"
-  }));
-
-  salvarDia.run(data, registro.entrada, registro.saidaAlmoco, registro.retornoAlmoco, registro.saida, JSON.stringify(extras));
-  res.status(novo ? 201 : 200).json(converterRegistro(buscarDia.get(data)));
+const excluirRegistroAuditado = db.transaction((data, justificativa) => {
+  const atual = buscarDia.get(data);
+  if (!atual) return false;
+  db.prepare("DELETE FROM registros WHERE data = ?").run(data);
+  db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'exclusao', ?, NULL, ?, ?)"
+  ).run(data, JSON.stringify(converterRegistro(atual)), justificativa.trim(), new Date().toISOString());
+  return true;
 });
 
 app.delete("/api/registros/:data", (req, res) => {
   const { data } = req.params;
   if (!dataValida(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
-
-  const resultado = excluirDia.run(data);
-  if (!resultado.changes) return res.status(404).json({ erro: "Registro não encontrado." });
+  if (!justificativaValida(req.body?.justificativa)) {
+    return res.status(400).json({ erro: "Informe justificativa para a exclusão (10 a 500 caracteres)." });
+  }
+  if (!excluirRegistroAuditado(data, req.body.justificativa)) {
+    return res.status(404).json({ erro: "Registro não encontrado." });
+  }
   res.status(204).end();
 });
 
@@ -160,16 +284,30 @@ app.put("/api/configuracoes", (req, res) => {
 
 // Restauração completa em transação: falha na validação não altera o banco.
 const restaurarBackup = db.transaction((backup) => {
+  const anteriores = new Map(buscarTodos.all().map(linha => [linha.data, converterRegistro(linha)]));
   db.prepare("DELETE FROM registros").run();
   for (const [data, registro] of Object.entries(backup.registros)) {
     const extras = registro.extras.map(extra => ({
-      horario: extra.horario,
-      descricao: extra.descricao ?? "Batida extra"
+      horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
     }));
-    salvarDia.run(
-      data, registro.entrada, registro.saidaAlmoco,
-      registro.retornoAlmoco, registro.saida, JSON.stringify(extras)
-    );
+    salvarDia.run(data, registro.entrada, registro.saidaAlmoco,
+      registro.retornoAlmoco, registro.saida, JSON.stringify(extras));
+    const minutos = backup.jornadasPrevistas?.[data]?.minutos ??
+      minutosPlanejados(backup.configuracoes?.jornada ?? buscarConfiguracoes.get().jornada);
+    db.prepare("INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?)")
+      .run(data, minutos, new Date().toISOString());
+  }
+  const posteriores = new Map(buscarTodos.all().map(linha => [linha.data, converterRegistro(linha)]));
+  const evento = db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'restauracao', ?, ?, ?, ?)"
+  );
+  const agora = new Date().toISOString();
+  for (const data of new Set([...anteriores.keys(), ...posteriores.keys()])) {
+    const antes = anteriores.get(data) ?? null;
+    const depois = posteriores.get(data) ?? null;
+    if (JSON.stringify(antes) !== JSON.stringify(depois)) {
+      evento.run(data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), agora);
+    }
   }
   if (backup.configuracoes) {
     const config = backup.configuracoes;
@@ -191,8 +329,9 @@ app.put("/api/backup", (req, res) => {
     && (config.inicioSemana === "0" || config.inicioSemana === "1")
   );
 
-  if (!registrosValidos || !configValida) {
-    return res.status(400).json({ erro: "Backup inválido. Confira registros e configurações." });
+  if (!registrosValidos || !configValida || !justificativaValida(backup?.justificativa) ||
+      !previstasValidas(backup?.jornadasPrevistas, registros)) {
+    return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
   }
 
   restaurarBackup(backup);

@@ -4,6 +4,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
         const STORAGE_CONFIG = "meu_ponto_config";
         const CAMPOS_PONTO = ["entrada", "saidaAlmoco", "retornoAlmoco", "saida"];
         let registros = {};
+        let jornadasPrevistas = {};
+        let dataJornadaAtiva = null;
         let configuracoes = carregarConfiguracoesLocais();
         let mensagemTimer = null;
         let pontoServidorPronto = false;
@@ -53,6 +55,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
             csrfToken = null;
             pontoServidorPronto = false;
             registros = {};
+            jornadasPrevistas = {};
+            dataJornadaAtiva = null;
             configuracoes = { nome: "", jornada: "08:00", inicioSemana: "1" };
             document.getElementById("btnBaterPonto").disabled = true;
             document.getElementById("senhaModal").style.display = "none";
@@ -200,12 +204,28 @@ const STORAGE_PONTO = "meu_ponto_registros";
             return requisitarAPI(`/api/registros/${data}`, opcoes);
         }
 
-        function salvarRegistroNoServidor(data, registro) {
+        function salvarRegistroNoServidor(data, registro, justificativa) {
             return requisitarRegistro(data, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(registro)
+                body: JSON.stringify({ ...registro, justificativa })
             });
+        }
+
+        function solicitarJustificativa() {
+            const motivo = window.prompt(
+                "Por que você precisa corrigir ou excluir este registro? Informe ao menos 10 caracteres."
+            );
+            if (motivo === null) {
+                mostrarMensagem("Operação cancelada.");
+                return null;
+            }
+            const texto = motivo.trim();
+            if (texto.length < 10 || texto.length > 500) {
+                mostrarMensagem("A justificativa precisa ter entre 10 e 500 caracteres.");
+                return null;
+            }
+            return texto;
         }
 
         function exportarBackupLocal() {
@@ -256,7 +276,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                             try {
                                 // Não sobrescreve dias que possam ter sido criados no servidor.
                                 const atual = await requisitarRegistro(data);
-                                if (!atual) await salvarRegistroNoServidor(data, locais[data]);
+                                if (!atual) await salvarRegistroNoServidor(data, locais[data], "Importação de registros anteriores do navegador");
                             } catch (erroMigracao) {
                                 console.warn("Não foi possível migrar um dia local:", data, erroMigracao);
                                 falhas++;
@@ -291,6 +311,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 );
 
                 registros = dados;
+                jornadasPrevistas = await requisitarAPI("/api/jornada/previstas");
+                dataJornadaAtiva = (await requisitarAPI("/api/jornada/ativa")).data;
                 configuracoes = configServidor;
                 pontoServidorPronto = true;
                 carregarConfiguracoes();
@@ -302,7 +324,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 console.error("Falha ao carregar dados do banco de dados:", erro);
                 mostrarMensagem("Não foi possível carregar os dados do servidor. Confira sua conexão e tente novamente.");
             } finally {
-                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto;
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataJornadaAtiva || dataHoje()] || null);
             }
         }
 
@@ -368,8 +390,11 @@ const STORAGE_PONTO = "meu_ponto_registros";
 
 
         function dataHoje() {
-            const agora = new Date();
-            return `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}-${String(agora.getDate()).padStart(2, "0")}`;
+            const partes = Object.fromEntries(new Intl.DateTimeFormat("en-GB", {
+                timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit",
+                day: "2-digit"
+            }).formatToParts(new Date()).map(({ type, value }) => [type, value]));
+            return `${partes.year}-${partes.month}-${partes.day}`;
         }
 
         function formatarData(data) {
@@ -438,28 +463,26 @@ async function baterPonto() {
                 mostrarMensagem("Aguarde a conexão com o servidor para bater ponto.");
                 return;
             }
-
-            const data = dataHoje();
-            const registro = registros[data]
-                ? structuredClone(registros[data])
-                : { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
-            const horario = new Date().toTimeString().slice(0, 5);
-            const proximoCampo = CAMPOS_PONTO.find(campo => !registro[campo]);
-            if (proximoCampo) registro[proximoCampo] = horario;
-            else registro.extras.push({ horario, descricao: "Batida extra" });
-
             registrandoPonto = true;
             document.getElementById("btnBaterPonto").disabled = true;
             try {
-                registros[data] = await salvarRegistroNoServidor(data, registro);
+                // Nao aceita horario nem proximo campo vindos do navegador.
+                const resposta = await requisitarAPI("/api/jornada/marcar", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}"
+                });
+                registros[resposta.data] = resposta.registro;
+                dataJornadaAtiva = resposta.data;
+                jornadasPrevistas[resposta.data] = resposta.jornadaPrevista;
                 atualizarTela();
-                mostrarMensagem(`Ponto registrado às ${horario} no banco de dados.`);
+                mostrarMensagem(`Ponto registrado pelo servidor às ${resposta.horario}.`);
             } catch (erro) {
                 console.error("Não foi possível registrar o ponto:", erro);
-                mostrarMensagem("Falha ao salvar o ponto no banco de dados. Tente novamente.");
+                mostrarMensagem(erro.message || "Falha ao registrar ponto. Tente novamente.");
             } finally {
                 registrandoPonto = false;
-                document.getElementById("btnBaterPonto").disabled = false;
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataJornadaAtiva || dataHoje()] || null);
             }
         }
 
@@ -468,9 +491,20 @@ async function baterPonto() {
                 mostrarMensagem("Aguarde o carregamento do servidor.");
                 return false;
             }
+            const justificativa = solicitarJustificativa();
+            if (!justificativa) return false;
             try {
-                if (registros[data]) registros[data] = await salvarRegistroNoServidor(data, registros[data]);
-                else await requisitarRegistro(data, { method: "DELETE" });
+                if (registros[data]) {
+                    registros[data] = await salvarRegistroNoServidor(data, registros[data], justificativa);
+                } else {
+                    await requisitarRegistro(data, {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ justificativa })
+                    });
+                }
+                jornadasPrevistas = await requisitarAPI("/api/jornada/previstas");
+                dataJornadaAtiva = (await requisitarAPI("/api/jornada/ativa")).data;
                 return true;
             } catch (erro) {
                 console.error("Falha ao salvar registros no banco de dados:", erro);
@@ -495,7 +529,7 @@ async function baterPonto() {
 
 
         function atualizarTela() {
-            const hoje = dataHoje();
+            const hoje = dataJornadaAtiva || dataHoje();
             const registro = registros[hoje] || { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
             for (const campo of CAMPOS_PONTO) {
                 const elemento = document.getElementById(campo);
@@ -507,10 +541,14 @@ async function baterPonto() {
                 if (botaoApagar) botaoApagar.hidden = !registro[campo];
             }
             renderizarExtrasHoje(registro.extras || []);
-            const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+            const jornada = jornadaPrevistaDoDia(hoje);
             const trabalhado = minutosTrabalhados(registro);
             document.getElementById("horasHoje").textContent = formatarDuracao(trabalhado);
             document.getElementById("jornadaHoje").textContent = formatarDuracao(jornada);
+            const botaoPonto = document.getElementById("btnBaterPonto");
+            const encerrada = jornadaConcluida(registro);
+            botaoPonto.disabled = !pontoServidorPronto || registrandoPonto || encerrada;
+            botaoPonto.textContent = encerrada ? "Jornada concluída" : "Registrar ponto";
             const saldo = document.getElementById("saldoHoje");
             const diferenca = saldoCalculado(registro, jornada);
             saldo.textContent = saldoDaJornada(registro, jornada);
@@ -540,9 +578,14 @@ async function baterPonto() {
             detalhes.type = "button";
             detalhes.className = "btn btn-secundario";
             detalhes.textContent = "Ver detalhes";
-            detalhes.addEventListener("click", () => abrirModalExtra(dataHoje()));
+            detalhes.addEventListener("click", () => abrirModalExtra(dataJornadaAtiva || dataHoje()));
             resumo.append(texto, detalhes);
             lista.appendChild(resumo);
+        }
+
+        function jornadaPrevistaDoDia(data) {
+            const valor = jornadasPrevistas[data]?.minutos;
+            return Number.isInteger(valor) ? valor : (minutosDeHorario(configuracoes.jornada) ?? 480);
         }
 
         function renderizarHistorico() {
@@ -571,7 +614,7 @@ async function baterPonto() {
                 const registro = registros[data];
                 const linha = document.createElement("tr");
                 const trabalhado = minutosTrabalhados(registro);
-                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                const jornada = jornadaPrevistaDoDia(data);
                 const saldo = saldoCalculado(registro, jornada);
                 const valores = [
                     formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—",
@@ -596,6 +639,10 @@ async function baterPonto() {
                         celula.textContent = valor;
                     }
 
+                    if (indice === 7 && jornadasPrevistas[data]?.origem === "legado_estimado") {
+                        celula.title = "Estimativa congelada na migração. A jornada prevista originalmente não é conhecida.";
+                        celula.textContent += " (estimado)";
+                    }
                     if (indice === 7 && saldo !== null && saldo !== 0) {
                         celula.classList.add(saldo > 0 ? "saldo-positivo" : "saldo-negativo");
                     }
@@ -626,7 +673,7 @@ async function baterPonto() {
         }
 
         function editarBatidaHoje(campo) {
-            abrirEdicao(dataHoje(), campo);
+            abrirEdicao(dataJornadaAtiva || dataHoje(), campo);
         }
 
         function abrirEdicao(data, campoFoco = null) {
@@ -694,7 +741,7 @@ async function baterPonto() {
         }
 
         function excluirBatidaHoje(campo) {
-            excluirBatida(dataHoje(), campo);
+            excluirBatida(dataJornadaAtiva || dataHoje(), campo);
         }
 
         async function excluirBatidaEmEdicao(campo) {
@@ -761,7 +808,7 @@ async function baterPonto() {
             });
         }
 
-        function abrirModalExtra(data = dataHoje(), indice = null) {
+        function abrirModalExtra(data = dataJornadaAtiva || dataHoje(), indice = null) {
             const registro = registros[data];
             const extra = indice === null ? null : registro?.extras?.[indice];
             document.getElementById("dataExtra").value = data;
@@ -843,7 +890,7 @@ async function baterPonto() {
 
         function exportarJSON() {
             if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o banco de dados para fazer backup.");
-            const backup = { versao: 1, exportadoEm: new Date().toISOString(), configuracoes, registros };
+            const backup = { versao: 2, exportadoEm: new Date().toISOString(), configuracoes, registros, jornadasPrevistas };
             baixarArquivo(`backup-meu-ponto-${dataHoje()}.json`, JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
             mostrarMensagem("Backup JSON baixado.");
         }
@@ -851,12 +898,12 @@ async function baterPonto() {
         function exportarCSV() {
             if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o banco de dados para exportar CSV.");
             const mes = document.getElementById("mesFiltro").value;
-            const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo"]];
+            const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo", "Jornada prevista", "Origem do plano"]];
             Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
                 const registro = registros[data];
                 const trabalhado = minutosTrabalhados(registro);
-                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
-                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)]);
+                const jornada = jornadaPrevistaDoDia(data);
+                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada), formatarDuracao(jornada), jornadasPrevistas[data]?.origem || "sem_snapshot"]);
             });
             const csv = "\uFEFF" + linhas.map(linha => linha.map(valor => `"${String(valor).replace(/"/g, '""')}"`).join(";")).join("\r\n");
             baixarArquivo(`meu-ponto-${mes || dataHoje().slice(0, 7)}.csv`, csv, "text/csv;charset=utf-8");
@@ -878,11 +925,15 @@ async function baterPonto() {
                     " e as configurações presentes no arquivo. Baixe primeiro um backup atual. Continuar?"
                 )) return;
 
+                const justificativa = solicitarJustificativa();
+                if (!justificativa) return;
                 await requisitarAPI("/api/backup", {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
+                        justificativa,
                         registros: conteudo.registros,
+                        ...(conteudo.jornadasPrevistas ? { jornadasPrevistas: conteudo.jornadasPrevistas } : {}),
                         ...(conteudo.configuracoes ? { configuracoes: conteudo.configuracoes } : {})
                     })
                 });
