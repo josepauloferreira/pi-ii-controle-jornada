@@ -37,4 +37,32 @@ function registroVazio() {
   return { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
 }
 
-module.exports = { CAMPOS, FUSO, horarioDoServidor, proximoCampo, justificativaValida, registroVazio };
+
+const MAX_JORNADA_ABERTA_MS = 20 * 60 * 60 * 1000;
+
+function diaAnterior(data) {
+  const instante = new Date(data + "T00:00:00Z");
+  instante.setUTCDate(instante.getUTCDate() - 1);
+  return instante.toISOString().slice(0, 10);
+}
+
+// Uma jornada de ontem somente continua hoje quando a entrada original foi
+// capturada pelo servidor, a sequência segue aberta e há menos de 20 horas.
+// Registros legados/importados incompletos não capturam o dia seguinte.
+function resolverDataJornada(agora, registroHoje, registroAnterior, entradaAnteriorISO) {
+  const atual = horarioDoServidor(agora);
+  if (registroHoje && CAMPOS.some(campo => registroHoje[campo] != null)) return atual.data;
+  if (!entradaAnteriorISO || !registroAnterior?.entrada) return atual.data;
+  const decorrido = agora.getTime() - Date.parse(entradaAnteriorISO);
+  if (!Number.isFinite(decorrido) || decorrido < 0 || decorrido > MAX_JORNADA_ABERTA_MS) return atual.data;
+  return proximoCampo(registroAnterior) ? diaAnterior(atual.data) : atual.data;
+}
+
+// Minutos planejados são um snapshot do dia, não uma referência à configuração atual.
+function minutosPlanejados(hhmm) {
+  if (typeof hhmm !== "string" || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(hhmm)) return null;
+  const [horas, minutos] = hhmm.split(":").map(Number);
+  return horas * 60 + minutos;
+}
+
+module.exports = { CAMPOS, FUSO, horarioDoServidor, proximoCampo, justificativaValida, registroVazio, diaAnterior, resolverDataJornada, minutosPlanejados };
