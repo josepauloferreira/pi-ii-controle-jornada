@@ -421,15 +421,38 @@ function createCloudApp({ client: suppliedClient } = {}) {
     const configuracoes = backup?.configuracoes;
     const ok = registros && typeof registros === "object" && !Array.isArray(registros) &&
       Object.entries(registros).every(([date, record]) => validDate(date) && validRecord(record)) &&
-      (configuracoes === undefined || validSettings(configuracoes));
-    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros e configurações." });
-    // Uma transacao atomica garante rollback completo se algum item falhar.
+      (configuracoes === undefined || validSettings(configuracoes)) &&
+      justificativaValida(backup?.justificativa);
+    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
+
+    const db = req.cloudDb;
+    const anteriores = await db.execute("SELECT * FROM registros ORDER BY data");
+    const previous = new Map(anteriores.rows.map(row => [row.data, recordRow(row)]));
+    const subsequent = new Map(Object.entries(registros).map(([data, record]) => [data, {
+      entrada: record.entrada, saidaAlmoco: record.saidaAlmoco,
+      retornoAlmoco: record.retornoAlmoco, saida: record.saida,
+      extras: record.extras.map(extra => ({
+        horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
+      }))
+    }]));
+    // Operacoes e auditoria participam do mesmo batch transacional.
     const statements = ["DELETE FROM registros"];
-    for (const [date, record] of Object.entries(registros)) statements.push(saveDay(date, record));
+    for (const [date, record] of subsequent) statements.push(saveDay(date, record));
+    const instante = new Date().toISOString();
+    for (const data of new Set([...previous.keys(), ...subsequent.keys()])) {
+      const antes = previous.get(data) ?? null;
+      const depois = subsequent.get(data) ?? null;
+      if (JSON.stringify(antes) !== JSON.stringify(depois)) {
+        statements.push(sql(
+          "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'restauracao', ?, ?, ?, ?)",
+          [data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), instante]
+        ));
+      }
+    }
     if (configuracoes) statements.push(sql(
       "UPDATE configuracoes SET nome = ?, jornada = ?, inicioSemana = ? WHERE id = 1",
       [configuracoes.nome, configuracoes.jornada, configuracoes.inicioSemana]));
-    await req.cloudDb.batch(statements, "write");
+    await db.batch(statements, "write");
     res.json({ registros: Object.keys(registros).length });
   });
   app.use((error, _req, res, _next) => {
