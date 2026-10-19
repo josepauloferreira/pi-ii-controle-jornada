@@ -55,6 +55,7 @@ module.exports = async function apiContract(t, request) {
   });
   await t.test('marcação segura usa horário do servidor e impede repetição imediata', async () => {
     assert.equal((await call('/api/jornada/marcar', 'POST', { horario: '08:00' })).status, 400);
+    assert.equal((await call('/api/jornada/marcar', 'POST', { campo: 'saida', instante: '2020-01-01T00:00:00.000Z' })).status, 400);
     assert.equal((await call('/api/jornada/marcar', 'POST', {}, session, false)).status, 403);
     const response = await call('/api/jornada/marcar', 'POST', {});
     assert.equal(response.status, 201);
@@ -78,6 +79,16 @@ module.exports = async function apiContract(t, request) {
     const updated = {...record, extras:[{horario:'19:15',descricao:'Atividade fictícia'}]};
     const r = await call('/api/registros/2026-10-15','PUT',updated);
     assert.equal(r.status,200); assert.deepEqual(await r.json(),updated);
+    const history = await call('/api/jornada/historico/2026-10-15');
+    assert.equal(history.status, 200);
+    const audit = (await history.json()).alteracoes;
+    assert.equal(audit.length, 2);
+    assert.equal(audit[0].operacao, 'correcao');
+    assert.equal(audit[0].antes, null);
+    assert.deepEqual(audit[0].depois, record);
+    assert.deepEqual(audit[1].antes, record);
+    assert.deepEqual(audit[1].depois, updated);
+    assert.ok(audit.every(row => row.justificativa.length >= 10));
   });
   await t.test('validação HH:mm, datas e extras', async () => {
     for (const entrada of ['24:00','08:60','8:30','18:30 PM',1830]) assert.equal((await call('/api/registros/2026-10-15','PUT',{...record,entrada})).status,400);
@@ -109,6 +120,10 @@ module.exports = async function apiContract(t, request) {
     assert.equal((await call('/api/registros/2026-10-15','DELETE')).status,204);
     assert.equal((await call('/api/registros/2026-10-15')).status,404);
     assert.equal((await call('/api/registros/2026-10-15','DELETE')).status,404);
+    const audit = (await (await call('/api/jornada/historico/2026-10-15')).json()).alteracoes;
+    assert.equal(audit.at(-1).operacao, 'exclusao');
+    assert.equal(audit.at(-1).depois, null);
+    assert.ok(audit.at(-1).antes);
   });
   await t.test('JSON inválido e limite de payload', async () => {
     const send = body => request('/api/backup',{method:'PUT',headers:{Cookie:session.cookie,'X-CSRF-Token':session.csrf,'Content-Type':'application/json'},body});
