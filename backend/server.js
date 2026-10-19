@@ -2,6 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const db = require("./database");
 const { configureAuth } = require("./auth");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio } = require("./jornada.cjs");
 
 const app = express();
 const porta = Number(process.env.PORT) || 3000;
@@ -81,6 +82,67 @@ app.use("/api", (req, res, next) => {
     return requireCsrf(req, res, next);
   }
   next();
+});
+
+// Marcações normais são originadas no servidor, jamais no relógio do navegador.
+// A transação serializa leitura do estado, inclusão do evento e projeção do dia.
+const registrarMarcacao = db.transaction(() => {
+  const { data, horario, instante } = horarioDoServidor();
+  const anterior = buscarDia.get(data);
+  const antigo = anterior ? converterRegistro(anterior) : registroVazio();
+  const campo = proximoCampo(antigo);
+  if (campo === undefined) return { erro: "Jornada anterior inconsistente. Utilize correção justificada.", status: 409 };
+  if (campo === null) return { erro: "As quatro marcações da jornada já foram realizadas.", status: 409 };
+
+  const ultimo = db.prepare(
+    "SELECT instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante DESC LIMIT 1"
+  ).get(data);
+  if (ultimo && Date.parse(instante) - Date.parse(ultimo.instante) < 60_000) {
+    return { erro: "Aguarde pelo menos um minuto entre marcações.", status: 409 };
+  }
+
+  // A chave (data, campo) impede sobrescrever ou repetir a marcação original.
+  db.prepare("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)")
+    .run(data, campo, horario, instante);
+  const atualizado = { ...antigo, [campo]: horario };
+  salvarDia.run(data, atualizado.entrada, atualizado.saidaAlmoco,
+    atualizado.retornoAlmoco, atualizado.saida, JSON.stringify(atualizado.extras));
+  db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)"
+  ).run(data, JSON.stringify(antigo), JSON.stringify(atualizado), "Marcação automática pelo servidor", instante);
+  return { data, campo, horario, instante, registro: atualizado };
+});
+
+app.post("/api/jornada/marcar", (req, res) => {
+  if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
+    return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
+  }
+  try {
+    const resultado = registrarMarcacao();
+    if (resultado.status) return res.status(resultado.status).json({ erro: resultado.erro });
+    return res.status(201).json(resultado);
+  } catch (erro) {
+    if (erro.code?.startsWith("SQLITE_CONSTRAINT")) {
+      return res.status(409).json({ erro: "Marcação já registrada. Atualize a página." });
+    }
+    throw erro;
+  }
+});
+
+app.get("/api/jornada/historico/:data", (req, res) => {
+  const { data } = req.params;
+  if (!dataValida(data)) return res.status(400).json({ erro: "Data inválida." });
+  const eventos = db.prepare(
+    "SELECT campo, horario, instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante"
+  ).all(data);
+  const alteracoes = db.prepare(
+    "SELECT id, operacao, antes, depois, justificativa, instante FROM registro_auditoria WHERE data = ? ORDER BY id"
+  ).all(data).map(item => ({
+    ...item,
+    antes: item.antes ? JSON.parse(item.antes) : null,
+    depois: item.depois ? JSON.parse(item.depois) : null
+  }));
+  res.json({ data, eventos, alteracoes, origem: eventos.length ? "servidor" : "legado_ou_importado" });
 });
 
 app.get("/api/registros", (req, res) => {
