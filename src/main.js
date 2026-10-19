@@ -55,6 +55,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
             csrfToken = null;
             pontoServidorPronto = false;
             registros = {};
+            jornadasPrevistas = {};
+            dataJornadaAtiva = null;
             configuracoes = { nome: "", jornada: "08:00", inicioSemana: "1" };
             document.getElementById("btnBaterPonto").disabled = true;
             document.getElementById("senhaModal").style.display = "none";
@@ -636,6 +638,10 @@ async function baterPonto() {
                         celula.textContent = valor;
                     }
 
+                    if (indice === 7 && jornadasPrevistas[data]?.origem === "legado_estimado") {
+                        celula.title = "Estimativa congelada na migração. A jornada prevista originalmente não é conhecida.";
+                        celula.textContent += " (estimado)";
+                    }
                     if (indice === 7 && saldo !== null && saldo !== 0) {
                         celula.classList.add(saldo > 0 ? "saldo-positivo" : "saldo-negativo");
                     }
@@ -891,12 +897,12 @@ async function baterPonto() {
         function exportarCSV() {
             if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o banco de dados para exportar CSV.");
             const mes = document.getElementById("mesFiltro").value;
-            const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo"]];
+            const linhas = [["Data", "Entrada", "Saída almoço", "Retorno almoço", "Saída", "Extras", "Horas trabalhadas", "Saldo", "Jornada prevista", "Origem do plano"]];
             Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
                 const registro = registros[data];
                 const trabalhado = minutosTrabalhados(registro);
                 const jornada = jornadaPrevistaDoDia(data);
-                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)]);
+                linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada), formatarDuracao(jornada), jornadasPrevistas[data]?.origem || "sem_snapshot"]);
             });
             const csv = "\uFEFF" + linhas.map(linha => linha.map(valor => `"${String(valor).replace(/"/g, '""')}"`).join(";")).join("\r\n");
             baixarArquivo(`meu-ponto-${mes || dataHoje().slice(0, 7)}.csv`, csv, "text/csv;charset=utf-8");
