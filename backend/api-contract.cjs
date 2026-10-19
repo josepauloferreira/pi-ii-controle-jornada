@@ -7,13 +7,21 @@ module.exports = async function apiContract(t, request) {
   const record = { entrada: '08:30', saidaAlmoco: '12:00', retornoAlmoco: '13:00', saida: '18:30', extras: [] };
   const settings = { nome: 'Demonstração fictícia', jornada: '08:00', inicioSemana: '1' };
   let session, second;
-  const call = (route, method = 'GET', data, auth = session, csrf = true) => request(route, {
-    method, headers: {
-      ...(data !== undefined ? { 'Content-Type': 'application/json' } : {}),
-      ...(auth ? { Cookie: auth.cookie } : {}),
-      ...(auth && csrf ? { 'X-CSRF-Token': auth.csrf } : {})
-    }, ...(data !== undefined ? { body: JSON.stringify(data) } : {})
-  });
+  const justificativa = "Correção fictícia realizada no contrato HTTP.";
+  const call = (route, method = 'GET', data, auth = session, csrf = true) => {
+    const alterarDia = /^\/api\/registros\/\d{4}-/.test(route) && (method === 'PUT' || method === 'DELETE');
+    const importar = route === '/api/backup' && method === 'PUT';
+    const corpo = (alterarDia || importar) && data !== undefined
+      ? { ...data, justificativa }
+      : method === 'DELETE' && alterarDia ? { justificativa } : data;
+    return request(route, {
+      method, headers: {
+        ...(corpo !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(auth ? { Cookie: auth.cookie } : {}),
+        ...(auth && csrf ? { 'X-CSRF-Token': auth.csrf } : {})
+      }, ...(corpo !== undefined ? { body: JSON.stringify(corpo) } : {})
+    });
+  };
   async function credentials(response) {
     assert.equal(response.status, 200);
     const cookie = response.headers.get('set-cookie');
@@ -44,6 +52,26 @@ module.exports = async function apiContract(t, request) {
       ['/api/configuracoes','PUT',settings], ['/api/backup','PUT',{registros:{}}],
       ['/api/auth/password','POST',{senhaAtual:user.senha,novaSenha:nextPassword}], ['/api/auth/logout','POST']
     ]) assert.equal((await call(path,method,body,session,false)).status,403);
+  });
+  await t.test('marcação segura usa horário do servidor e impede repetição imediata', async () => {
+    assert.equal((await call('/api/jornada/marcar', 'POST', { horario: '08:00' })).status, 400);
+    assert.equal((await call('/api/jornada/marcar', 'POST', {}, session, false)).status, 403);
+    const response = await call('/api/jornada/marcar', 'POST', {});
+    assert.equal(response.status, 201);
+    const data = await response.json();
+    assert.equal(data.campo, 'entrada');
+    assert.match(data.data, /^\\d{4}-\\d{2}-\\d{2}$/);
+    assert.match(data.horario, /^(?:[01]\\d|2[0-3]):[0-5]\\d$/);
+    assert.equal(data.registro.entrada, data.horario);
+    assert.ok(!Number.isNaN(Date.parse(data.instante)));
+    assert.equal((await call('/api/jornada/marcar', 'POST', {})).status, 409);
+    const history = await call('/api/jornada/historico/' + data.data);
+    assert.equal(history.status, 200);
+    const body = await history.json();
+    assert.equal(body.origem, 'servidor');
+    assert.equal(body.eventos.length, 1);
+    assert.equal(body.eventos[0].horario, data.horario);
+    assert.equal(body.alteracoes[0].operacao, 'marcacao');
   });
   await t.test('criação e edição com batidas extras', async () => {
     assert.equal((await call('/api/registros/2026-10-15','PUT',record)).status,201);
