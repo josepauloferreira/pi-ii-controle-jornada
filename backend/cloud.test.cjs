@@ -56,7 +56,7 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
     assert.equal((await request("/api/configuracoes", { method: "PUT", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({nome:"x",jornada:"08:00",inicioSemana:"1"}) })).status, 403);
 
     const record = { entrada: "08:30", saidaAlmoco: "12:00", retornoAlmoco: "13:00", saida: "18:30", extras: [] };
-    response = await request("/api/registros/2026-10-15", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify(record) });
+    response = await request("/api/registros/2026-10-15", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify({ ...record, justificativa: "Correção fictícia validada nos testes." }) });
     assert.equal(response.status, 201);
     assert.equal((await response.json()).saida, "18:30");
     assert.equal((await request("/api/registros?mes=2026-10", { headers: getAuth(cookie) }).then(r => r.json()))["2026-10-15"].saida, "18:30");
@@ -66,7 +66,7 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
     assert.equal((await request("/api/registros/2026-10-15", { headers: getAuth(cookie) })).status, 200);
 
     const backup = { registros: { "2026-10-16": record }, configuracoes: {nome:"Conta Pessoal",jornada:"08:00",inicioSemana:"1"} };
-    assert.equal((await request("/api/backup", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify(backup) })).status, 200);
+    assert.equal((await request("/api/backup", { method: "PUT", headers: csrfHeaders(cookie, initial.csrfToken), body: JSON.stringify({ ...backup, justificativa: "Restauração fictícia validada nos testes." }) })).status, 200);
     assert.equal((await request("/api/registros/2026-10-15", { headers: getAuth(cookie) })).status, 404);
     assert.equal((await request("/api/configuracoes", { headers: getAuth(cookie) }).then(r => r.json())).nome, "Conta Pessoal");
 
@@ -124,7 +124,11 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
   }};
   const servers=[createCloudApp({client:clients[0]}).listen(0,'127.0.0.1'),createCloudApp({client:wrapped}).listen(0,'127.0.0.1')];
   const request=(i,route,method='GET',data,session,csrf=true)=>fetch(`http://127.0.0.1:${servers[i].address().port}${route}`,{
-    method,headers:{'Content-Type':'application/json',...(session?{Cookie:session.cookie,...(csrf?{'X-CSRF-Token':session.csrf}:{})}:{}),'X-Forwarded-Proto':'https'},...(data===undefined?{}:{body:JSON.stringify(data)})
+    method,headers:{'Content-Type':'application/json',...(session?{Cookie:session.cookie,...(csrf?{'X-CSRF-Token':session.csrf}:{})}:{}),'X-Forwarded-Proto':'https'},
+    ...(data===undefined?{}:{body:JSON.stringify(
+      ((method==='PUT' && /^\/api\/(registros\/|backup$)/.test(route)) || (method==='DELETE' && route.startsWith('/api/registros/')))
+        ? {...data, justificativa: 'Alteração fictícia testada com auditoria.'} : data
+    )})
   });
   const user={usuario:'instancias.teste',senha:'senha-ficticia-instancias-123'};
   const record={entrada:'08:00',saidaAlmoco:null,retornoAlmoco:null,saida:'18:30',extras:[]};
