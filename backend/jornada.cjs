@@ -19,6 +19,8 @@ function horarioDoServidor(instante = new Date(), fuso = FUSO) {
 
 function proximoCampo(registro) {
   if (!registro) return CAMPOS[0];
+  // Jornadas legadas sem pausa, mas com entrada e saida, ja estao concluidas.
+  if (registro.entrada && registro.saida && !registro.saidaAlmoco && !registro.retornoAlmoco) return null;
   let ausente = false;
   for (const campo of CAMPOS) {
     if (registro[campo] == null) ausente = true;
