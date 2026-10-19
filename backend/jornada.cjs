@@ -60,7 +60,7 @@ function resolverDataJornada(agora, registroHoje, registroAnterior, entradaAnter
 
 // Minutos planejados são um snapshot do dia, não uma referência à configuração atual.
 function minutosPlanejados(hhmm) {
-  if (typeof hhmm !== "string" || !/^([01]\\d|2[0-3]):[0-5]\\d$/.test(hhmm)) return null;
+  if (typeof hhmm !== "string" || !/^([01]\d|2[0-3]):[0-5]\d$/.test(hhmm)) return null;
   const [horas, minutos] = hhmm.split(":").map(Number);
   return horas * 60 + minutos;
 }
