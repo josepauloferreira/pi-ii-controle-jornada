@@ -366,17 +366,38 @@ function createCloudApp({ client: suppliedClient } = {}) {
     const { data } = req.params;
     if (!validDate(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
     if (!validRecord(req.body)) return res.status(400).json({ erro: "Registro inválido. Informe os quatro horários (HH:mm ou null) e a lista extras." });
+    if (!justificativaValida(req.body.justificativa)) {
+      return res.status(400).json({ erro: "Informe a justificativa da correção (10 a 500 caracteres)." });
+    }
     const db = req.cloudDb;
-    const existed = (await db.execute(sql("SELECT 1 FROM registros WHERE data = ?", [data]))).rows.length > 0;
-    await db.execute(saveDay(data, req.body));
-    const row = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
-    res.status(existed ? 200 : 201).json(recordRow(row));
+    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+    const novo = { entrada: req.body.entrada, saidaAlmoco: req.body.saidaAlmoco,
+      retornoAlmoco: req.body.retornoAlmoco, saida: req.body.saida,
+      extras: req.body.extras.map(extra => ({
+        horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
+      })) };
+    await db.batch([
+      saveDay(data, novo),
+      sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'correcao', ?, ?, ?, ?)",
+        [data, anterior ? JSON.stringify(recordRow(anterior)) : "null", JSON.stringify(novo),
+          req.body.justificativa.trim(), new Date().toISOString()])
+    ], "write");
+    res.status(anterior ? 200 : 201).json(novo);
   });
   app.delete("/api/registros/:data", async (req, res) => {
     const { data } = req.params;
     if (!validDate(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
-    const result = await req.cloudDb.execute(sql("DELETE FROM registros WHERE data = ?", [data]));
-    if (!result.rowsAffected) return res.status(404).json({ erro: "Registro não encontrado." });
+    if (!justificativaValida(req.body?.justificativa)) {
+      return res.status(400).json({ erro: "Informe justificativa para a exclusão (10 a 500 caracteres)." });
+    }
+    const db = req.cloudDb;
+    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+    if (!anterior) return res.status(404).json({ erro: "Registro não encontrado." });
+    await db.batch([
+      sql("DELETE FROM registros WHERE data = ?", [data]),
+      sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'exclusao', ?, NULL, ?, ?)",
+        [data, JSON.stringify(recordRow(anterior)), req.body.justificativa.trim(), new Date().toISOString()])
+    ], "write");
     res.status(204).end();
   });
   app.get("/api/configuracoes", async (req, res) => {
