@@ -166,30 +166,55 @@ app.get("/api/registros/:data", (req, res) => {
   res.json(converterRegistro(linha));
 });
 
+// Edicoes manuais devem preservar a versao anterior e a justificativa.
+const alterarRegistro = db.transaction((data, registro, justificativa) => {
+  const antes = buscarDia.get(data);
+  const anterior = antes ? converterRegistro(antes) : null;
+  const extras = registro.extras.map(extra => ({
+    horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
+  }));
+  const novo = { entrada: registro.entrada, saidaAlmoco: registro.saidaAlmoco,
+    retornoAlmoco: registro.retornoAlmoco, saida: registro.saida, extras };
+  salvarDia.run(data, novo.entrada, novo.saidaAlmoco, novo.retornoAlmoco,
+    novo.saida, JSON.stringify(novo.extras));
+  db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'correcao', ?, ?, ?, ?)"
+  ).run(data, JSON.stringify(anterior), JSON.stringify(novo), justificativa.trim(), new Date().toISOString());
+  return { criado: !antes, novo };
+});
+
 app.put("/api/registros/:data", (req, res) => {
   const { data } = req.params;
   if (!dataValida(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
   if (!registroValido(req.body)) {
     return res.status(400).json({ erro: "Registro inválido. Informe os quatro horários (HH:mm ou null) e a lista extras." });
   }
+  if (!justificativaValida(req.body.justificativa)) {
+    return res.status(400).json({ erro: "Informe a justificativa da correção (10 a 500 caracteres)." });
+  }
+  const resultado = alterarRegistro(data, req.body, req.body.justificativa);
+  res.status(resultado.criado ? 201 : 200).json(resultado.novo);
+});
 
-  const novo = !buscarDia.get(data);
-  const registro = req.body;
-  const extras = registro.extras.map(extra => ({
-    horario: extra.horario,
-    descricao: extra.descricao ?? "Batida extra"
-  }));
-
-  salvarDia.run(data, registro.entrada, registro.saidaAlmoco, registro.retornoAlmoco, registro.saida, JSON.stringify(extras));
-  res.status(novo ? 201 : 200).json(converterRegistro(buscarDia.get(data)));
+const excluirRegistroAuditado = db.transaction((data, justificativa) => {
+  const atual = buscarDia.get(data);
+  if (!atual) return false;
+  db.prepare("DELETE FROM registros WHERE data = ?").run(data);
+  db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'exclusao', ?, NULL, ?, ?)"
+  ).run(data, JSON.stringify(converterRegistro(atual)), justificativa.trim(), new Date().toISOString());
+  return true;
 });
 
 app.delete("/api/registros/:data", (req, res) => {
   const { data } = req.params;
   if (!dataValida(data)) return res.status(400).json({ erro: "Data inválida. Use AAAA-MM-DD." });
-
-  const resultado = excluirDia.run(data);
-  if (!resultado.changes) return res.status(404).json({ erro: "Registro não encontrado." });
+  if (!justificativaValida(req.body?.justificativa)) {
+    return res.status(400).json({ erro: "Informe justificativa para a exclusão (10 a 500 caracteres)." });
+  }
+  if (!excluirRegistroAuditado(data, req.body.justificativa)) {
+    return res.status(404).json({ erro: "Registro não encontrado." });
+  }
   res.status(204).end();
 });
 
