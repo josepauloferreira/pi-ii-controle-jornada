@@ -101,6 +101,37 @@ test("Turso API: cadastro, autenticação, CSRF, persistência, backup, senha e 
   }
 });
 
+test("migração conserva registros antigos e congela jornada estimada apenas uma vez", async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "jornada-legado-"));
+  const client = createClient({ url: "file:" + path.join(folder, "test.db") });
+  let server;
+  try {
+    await client.batch([
+      "CREATE TABLE registros (data TEXT PRIMARY KEY, entrada TEXT, saidaAlmoco TEXT, retornoAlmoco TEXT, saida TEXT, extras TEXT NOT NULL DEFAULT '[]')",
+      "CREATE TABLE configuracoes (id INTEGER PRIMARY KEY CHECK(id=1), nome TEXT NOT NULL DEFAULT '', jornada TEXT NOT NULL DEFAULT '08:00', inicioSemana TEXT NOT NULL DEFAULT '1')",
+      "INSERT INTO configuracoes (id, jornada) VALUES (1, '07:30')",
+      "INSERT INTO registros (data, entrada, saida, extras) VALUES ('2026-09-15', '08:00', '15:30', '[]')"
+    ], "write");
+    server = createCloudApp({ client }).listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const res = await fetch(`http://127.0.0.1:${server.address().port}/api/health`);
+    assert.equal(res.status, 200);
+    const read = () => client.execute("SELECT minutos, origem FROM jornada_prevista_dia WHERE data='2026-09-15'");
+    assert.deepEqual({ ...((await read()).rows[0]) }, { minutos: 450, origem: "legado_estimado" });
+    await client.execute("UPDATE configuracoes SET jornada = '06:00' WHERE id = 1");
+    await client.batch([
+      "INSERT OR IGNORE INTO configuracoes (id) VALUES (1)",
+      "INSERT OR IGNORE INTO jornada_prevista_dia (data,minutos,origem,definido_em) SELECT data,360,'legado_estimado',CURRENT_TIMESTAMP FROM registros"
+    ],"write");
+    assert.equal(Number((await read()).rows[0].minutos), 450);
+    assert.equal((await client.execute("SELECT entrada FROM registros WHERE data='2026-09-15'")).rows[0].entrada,"08:00");
+  } finally {
+    if (server) await new Promise(resolve => server.close(resolve));
+    client.close();
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test('contrato completo: libSQL em arquivo temporário', async t => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(),'jornada-cloud-contract-'));
   const client = createClient({url:'file:'+path.join(folder,'test.db')});
