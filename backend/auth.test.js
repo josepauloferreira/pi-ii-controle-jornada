@@ -77,7 +77,7 @@ test("cadastro concorrente, login, autorização, CSRF, jornada anterior, troca 
       method: "POST", cookie: authenticated.cookie,
       data: { senhaAtual: user.senha, novaSenha: "outra-senha-segura-123" }
     })).status, 403);
-    assert.equal((await request("/api/registros/2026-10-16", { method: "PUT", cookie: authenticated.cookie, csrf: authenticated.csrf, data: updatedRecord })).status, 201);
+    assert.equal((await request("/api/registros/2026-10-16", { method: "PUT", cookie: authenticated.cookie, csrf: authenticated.csrf, data: { ...updatedRecord, justificativa: "Correção fictícia com trilha auditável." } })).status, 201);
     assert.equal((await request("/api/registros/2026-10-16", { method: "DELETE", cookie: authenticated.cookie })).status, 403);
     assert.equal((await (await request("/api/registros/2026-10-16", { cookie: created.cookie })).json()).entrada, "08:45");
 
