@@ -60,8 +60,8 @@ module.exports = async function apiContract(t, request) {
     assert.equal(response.status, 201);
     const data = await response.json();
     assert.equal(data.campo, 'entrada');
-    assert.match(data.data, /^\\d{4}-\\d{2}-\\d{2}$/);
-    assert.match(data.horario, /^(?:[01]\\d|2[0-3]):[0-5]\\d$/);
+    assert.match(data.data, /^\d{4}-\d{2}-\d{2}$/);
+    assert.match(data.horario, /^(?:[01]\d|2[0-3]):[0-5]\d$/);
     assert.equal(data.registro.entrada, data.horario);
     assert.ok(!Number.isNaN(Date.parse(data.instante)));
     assert.equal((await call('/api/jornada/marcar', 'POST', {})).status, 409);
