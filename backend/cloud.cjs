@@ -3,7 +3,7 @@
 // Adaptador da API para Vercel Functions + Turso.
 // O backend local (backend/server.js com better-sqlite3) permanece inalterado.
 const express = require("express");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior } = require("./jornada.cjs");
 const crypto = require("node:crypto");
 
 const COOKIE_NAME = "meu_ponto_sessao";
@@ -290,12 +290,47 @@ function createCloudApp({ client: suppliedClient } = {}) {
           horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
         })))]);
   }
+  const congelarPrevista = (data, origem, instante) => sql(
+    "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) " +
+    "SELECT ?, CAST(SUBSTR(jornada,1,2) AS INTEGER)*60+CAST(SUBSTR(jornada,4,2) AS INTEGER), ?, ? " +
+    "FROM configuracoes WHERE id=1", [data, origem, instante]);
+
+  async function diaDaJornada(db, agora = new Date()) {
+    const hoje = horarioDoServidor(agora).data;
+    const ontem = diaAnterior(hoje);
+    const [atual, anterior, entrada] = await Promise.all([
+      db.execute(sql("SELECT * FROM registros WHERE data = ?", [hoje])),
+      db.execute(sql("SELECT * FROM registros WHERE data = ?", [ontem])),
+      db.execute(sql("SELECT instante FROM marcacoes_servidor WHERE data = ? AND campo='entrada'", [ontem]))
+    ]);
+    return resolverDataJornada(agora,
+      atual.rows[0] ? recordRow(atual.rows[0]) : null,
+      anterior.rows[0] ? recordRow(anterior.rows[0]) : null,
+      entrada.rows[0]?.instante);
+  }
+
+  app.get("/api/jornada/ativa", async (req, res) => {
+    const db = req.cloudDb;
+    const data = await diaDaJornada(db);
+    const result = await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]));
+    res.json({ data, registro: result.rows[0] ? recordRow(result.rows[0]) : registroVazio() });
+  });
+
+  app.get("/api/jornada/previstas", async (req, res) => {
+    const result = await req.cloudDb.execute("SELECT data, minutos, origem FROM jornada_prevista_dia ORDER BY data");
+    const previstas = {};
+    for (const { data, minutos, origem } of result.rows) previstas[data] = { minutos: Number(minutos), origem };
+    res.json(previstas);
+  });
+
   app.post("/api/jornada/marcar", async (req, res) => {
     if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
       return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
     }
-    const { data, horario, instante } = horarioDoServidor();
+    const agora = new Date();
+    const { horario, instante } = horarioDoServidor(agora);
     const db = req.cloudDb;
+    const data = await diaDaJornada(db, agora);
     const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
     const antigo = anterior ? recordRow(anterior) : registroVazio();
     const campo = proximoCampo(antigo);
@@ -310,11 +345,11 @@ function createCloudApp({ client: suppliedClient } = {}) {
     }
     const novo = { ...antigo, [campo]: horario };
     try {
-      // batch(write) e uma transacao: falha de UNIQUE desfaz evento e projecao.
       await db.batch([
         sql("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)",
           [data, campo, horario, instante]),
         saveDay(data, novo),
+        congelarPrevista(data, "registrada", instante),
         sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)",
           [data, JSON.stringify(antigo), JSON.stringify(novo), "Marcação automática pelo servidor", instante])
       ], "write");
@@ -324,7 +359,9 @@ function createCloudApp({ client: suppliedClient } = {}) {
       }
       throw error;
     }
-    res.status(201).json({ data, campo, horario, instante, registro: novo });
+    const prevista = (await db.execute(sql("SELECT minutos, origem FROM jornada_prevista_dia WHERE data=?", [data]))).rows[0];
+    res.status(201).json({ data, campo, horario, instante, registro: novo,
+      jornadaPrevista: { minutos: Number(prevista.minutos), origem: prevista.origem } });
   });
 
   app.get("/api/jornada/historico/:data", async (req, res) => {
@@ -380,6 +417,7 @@ function createCloudApp({ client: suppliedClient } = {}) {
       })) };
     await db.batch([
       saveDay(data, novo),
+      congelarPrevista(data, "importado", new Date().toISOString()),
       sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'correcao', ?, ?, ?, ?)",
         [data, anterior ? JSON.stringify(recordRow(anterior)) : "null", JSON.stringify(novo),
           req.body.justificativa.trim(), new Date().toISOString()])
