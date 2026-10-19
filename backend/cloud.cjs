@@ -75,7 +75,9 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS login_tentativas (chave TEXT PRIMARY KEY, quantidade INTEGER NOT NULL, expira_em INTEGER NOT NULL)",
   "CREATE TABLE IF NOT EXISTS marcacoes_servidor (data TEXT NOT NULL, campo TEXT NOT NULL CHECK(campo IN ('entrada','saidaAlmoco','retornoAlmoco','saida')), horario TEXT NOT NULL, instante TEXT NOT NULL, PRIMARY KEY(data,campo))",
   "CREATE TABLE IF NOT EXISTS registro_auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, operacao TEXT NOT NULL CHECK(operacao IN ('marcacao','correcao','exclusao','restauracao')), antes TEXT, depois TEXT, justificativa TEXT NOT NULL, instante TEXT NOT NULL)",
-  "CREATE INDEX IF NOT EXISTS registro_auditoria_data ON registro_auditoria(data, id)"
+  "CREATE INDEX IF NOT EXISTS registro_auditoria_data ON registro_auditoria(data, id)",
+  "CREATE TABLE IF NOT EXISTS jornada_prevista_dia (data TEXT PRIMARY KEY, minutos INTEGER NOT NULL CHECK(minutos BETWEEN 0 AND 1439), origem TEXT NOT NULL CHECK(origem IN ('registrada','legado_estimado','importado')), definido_em TEXT NOT NULL)",
+  "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) SELECT r.data, CAST(SUBSTR(c.jornada,1,2) AS INTEGER)*60+CAST(SUBSTR(c.jornada,4,2) AS INTEGER), 'legado_estimado', CURRENT_TIMESTAMP FROM registros r CROSS JOIN configuracoes c WHERE c.id=1"
 ];
 
 function createCloudApp({ client: suppliedClient } = {}) {
