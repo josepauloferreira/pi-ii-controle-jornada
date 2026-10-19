@@ -288,6 +288,61 @@ function createCloudApp({ client: suppliedClient } = {}) {
           horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
         })))]);
   }
+  app.post("/api/jornada/marcar", async (req, res) => {
+    if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
+      return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
+    }
+    const { data, horario, instante } = horarioDoServidor();
+    const db = req.cloudDb;
+    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+    const antigo = anterior ? recordRow(anterior) : registroVazio();
+    const campo = proximoCampo(antigo);
+    if (campo === undefined) return res.status(409).json({ erro: "Jornada anterior inconsistente. Utilize correção justificada." });
+    if (campo === null) return res.status(409).json({ erro: "As quatro marcações da jornada já foram realizadas." });
+
+    const ultima = (await db.execute(sql(
+      "SELECT instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante DESC LIMIT 1", [data]
+    ))).rows[0];
+    if (ultima && Date.parse(instante) - Date.parse(ultima.instante) < 60_000) {
+      return res.status(409).json({ erro: "Aguarde pelo menos um minuto entre marcações." });
+    }
+    const novo = { ...antigo, [campo]: horario };
+    try {
+      // batch(write) e uma transacao: falha de UNIQUE desfaz evento e projecao.
+      await db.batch([
+        sql("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)",
+          [data, campo, horario, instante]),
+        saveDay(data, novo),
+        sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)",
+          [data, JSON.stringify(antigo), JSON.stringify(novo), "Marcação automática pelo servidor", instante])
+      ], "write");
+    } catch (error) {
+      if (/UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(String(error.message))) {
+        return res.status(409).json({ erro: "Marcação já registrada. Atualize a página." });
+      }
+      throw error;
+    }
+    res.status(201).json({ data, campo, horario, instante, registro: novo });
+  });
+
+  app.get("/api/jornada/historico/:data", async (req, res) => {
+    const { data } = req.params;
+    if (!validDate(data)) return res.status(400).json({ erro: "Data inválida." });
+    const db = req.cloudDb;
+    const [eventos, alteracoes] = await Promise.all([
+      db.execute(sql("SELECT campo, horario, instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante", [data])),
+      db.execute(sql("SELECT id, operacao, antes, depois, justificativa, instante FROM registro_auditoria WHERE data = ? ORDER BY id", [data]))
+    ]);
+    res.json({
+      data, eventos: eventos.rows,
+      alteracoes: alteracoes.rows.map(item => ({
+        ...item, antes: item.antes ? JSON.parse(item.antes) : null,
+        depois: item.depois ? JSON.parse(item.depois) : null
+      })),
+      origem: eventos.rows.length ? "servidor" : "legado_ou_importado"
+    });
+  });
+
   app.get("/api/registros", async (req, res) => {
     const mes = req.query.mes;
     if (mes !== undefined && (typeof mes !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(mes))) {
