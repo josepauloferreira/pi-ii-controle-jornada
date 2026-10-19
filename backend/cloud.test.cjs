@@ -168,11 +168,11 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
       await clients[0].execute("CREATE TRIGGER rejeitar_teste BEFORE INSERT ON registros WHEN NEW.data = '2026-10-18' BEGIN SELECT RAISE(ABORT, 'teste privado'); END");
       const old=console.error; const logs=[];console.error=(...args)=>logs.push(args.join(' '));
       let r;
-      try {r=await request(1,'/api/backup','PUT',{registros:{'2026-10-19':record,'2026-10-18':record},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
+      try {r=await request(1,'/api/backup','PUT',{registros:{'2099-01-01':record,'2026-10-18':record},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
       assert.equal(r.status,503); assert.ok(!(await r.text()).includes('teste privado'));
       assert.ok(logs.every(line=>!line.includes('teste privado')));
       assert.equal((await request(0,'/api/registros/2026-10-17','GET',undefined,session)).status,200);
-      assert.equal((await request(0,'/api/registros/2026-10-19','GET',undefined,session)).status,404);
+      assert.equal((await request(0,'/api/registros/2099-01-01','GET',undefined,session)).status,404);
       assert.equal((await (await request(0,'/api/configuracoes','GET',undefined,session)).json()).jornada,'08:00');
       await clients[0].execute('DROP TRIGGER rejeitar_teste');
     });
