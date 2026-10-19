@@ -3,6 +3,7 @@
 // Adaptador da API para Vercel Functions + Turso.
 // O backend local (backend/server.js com better-sqlite3) permanece inalterado.
 const express = require("express");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio } = require("./jornada.cjs");
 const crypto = require("node:crypto");
 
 const COOKIE_NAME = "meu_ponto_sessao";
@@ -71,7 +72,10 @@ const SCHEMA = [
   "CREATE TABLE IF NOT EXISTS conta (id INTEGER PRIMARY KEY CHECK(id = 1), usuario TEXT NOT NULL COLLATE NOCASE UNIQUE, senha_hash TEXT NOT NULL)",
   "CREATE TABLE IF NOT EXISTS sessoes_conta (token_hash TEXT PRIMARY KEY, csrf_token TEXT NOT NULL, expira_em INTEGER NOT NULL)",
   "CREATE INDEX IF NOT EXISTS sessoes_conta_expiracao ON sessoes_conta(expira_em)",
-  "CREATE TABLE IF NOT EXISTS login_tentativas (chave TEXT PRIMARY KEY, quantidade INTEGER NOT NULL, expira_em INTEGER NOT NULL)"
+  "CREATE TABLE IF NOT EXISTS login_tentativas (chave TEXT PRIMARY KEY, quantidade INTEGER NOT NULL, expira_em INTEGER NOT NULL)",
+  "CREATE TABLE IF NOT EXISTS marcacoes_servidor (data TEXT NOT NULL, campo TEXT NOT NULL CHECK(campo IN ('entrada','saidaAlmoco','retornoAlmoco','saida')), horario TEXT NOT NULL, instante TEXT NOT NULL, PRIMARY KEY(data,campo))",
+  "CREATE TABLE IF NOT EXISTS registro_auditoria (id INTEGER PRIMARY KEY AUTOINCREMENT, data TEXT NOT NULL, operacao TEXT NOT NULL CHECK(operacao IN ('marcacao','correcao','exclusao','restauracao')), antes TEXT, depois TEXT, justificativa TEXT NOT NULL, instante TEXT NOT NULL)",
+  "CREATE INDEX IF NOT EXISTS registro_auditoria_data ON registro_auditoria(data, id)"
 ];
 
 function createCloudApp({ client: suppliedClient } = {}) {
