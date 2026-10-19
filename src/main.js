@@ -4,6 +4,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
         const STORAGE_CONFIG = "meu_ponto_config";
         const CAMPOS_PONTO = ["entrada", "saidaAlmoco", "retornoAlmoco", "saida"];
         let registros = {};
+        let jornadasPrevistas = {};
+        let dataJornadaAtiva = null;
         let configuracoes = carregarConfiguracoesLocais();
         let mensagemTimer = null;
         let pontoServidorPronto = false;
@@ -307,6 +309,8 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 );
 
                 registros = dados;
+                jornadasPrevistas = await requisitarAPI("/api/jornada/previstas");
+                dataJornadaAtiva = (await requisitarAPI("/api/jornada/ativa")).data;
                 configuracoes = configServidor;
                 pontoServidorPronto = true;
                 carregarConfiguracoes();
@@ -318,7 +322,7 @@ const STORAGE_PONTO = "meu_ponto_registros";
                 console.error("Falha ao carregar dados do banco de dados:", erro);
                 mostrarMensagem("Não foi possível carregar os dados do servidor. Confira sua conexão e tente novamente.");
             } finally {
-                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataHoje()] || null);
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataJornadaAtiva || dataHoje()] || null);
             }
         }
 
@@ -467,6 +471,8 @@ async function baterPonto() {
                     body: "{}"
                 });
                 registros[resposta.data] = resposta.registro;
+                dataJornadaAtiva = resposta.data;
+                jornadasPrevistas[resposta.data] = resposta.jornadaPrevista;
                 atualizarTela();
                 mostrarMensagem(`Ponto registrado pelo servidor às ${resposta.horario}.`);
             } catch (erro) {
@@ -474,7 +480,7 @@ async function baterPonto() {
                 mostrarMensagem(erro.message || "Falha ao registrar ponto. Tente novamente.");
             } finally {
                 registrandoPonto = false;
-                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataHoje()] || null);
+                document.getElementById("btnBaterPonto").disabled = !pontoServidorPronto || jornadaConcluida(registros[dataJornadaAtiva || dataHoje()] || null);
             }
         }
 
@@ -495,6 +501,7 @@ async function baterPonto() {
                         body: JSON.stringify({ justificativa })
                     });
                 }
+                jornadasPrevistas = await requisitarAPI("/api/jornada/previstas");
                 return true;
             } catch (erro) {
                 console.error("Falha ao salvar registros no banco de dados:", erro);
@@ -519,7 +526,7 @@ async function baterPonto() {
 
 
         function atualizarTela() {
-            const hoje = dataHoje();
+            const hoje = dataJornadaAtiva || dataHoje();
             const registro = registros[hoje] || { entrada: null, saidaAlmoco: null, retornoAlmoco: null, saida: null, extras: [] };
             for (const campo of CAMPOS_PONTO) {
                 const elemento = document.getElementById(campo);
@@ -531,7 +538,7 @@ async function baterPonto() {
                 if (botaoApagar) botaoApagar.hidden = !registro[campo];
             }
             renderizarExtrasHoje(registro.extras || []);
-            const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+            const jornada = jornadaPrevistaDoDia(hoje);
             const trabalhado = minutosTrabalhados(registro);
             document.getElementById("horasHoje").textContent = formatarDuracao(trabalhado);
             document.getElementById("jornadaHoje").textContent = formatarDuracao(jornada);
@@ -568,9 +575,14 @@ async function baterPonto() {
             detalhes.type = "button";
             detalhes.className = "btn btn-secundario";
             detalhes.textContent = "Ver detalhes";
-            detalhes.addEventListener("click", () => abrirModalExtra(dataHoje()));
+            detalhes.addEventListener("click", () => abrirModalExtra(dataJornadaAtiva || dataHoje()));
             resumo.append(texto, detalhes);
             lista.appendChild(resumo);
+        }
+
+        function jornadaPrevistaDoDia(data) {
+            const valor = jornadasPrevistas[data]?.minutos;
+            return Number.isInteger(valor) ? valor : (minutosDeHorario(configuracoes.jornada) ?? 480);
         }
 
         function renderizarHistorico() {
@@ -599,7 +611,7 @@ async function baterPonto() {
                 const registro = registros[data];
                 const linha = document.createElement("tr");
                 const trabalhado = minutosTrabalhados(registro);
-                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                const jornada = jornadaPrevistaDoDia(data);
                 const saldo = saldoCalculado(registro, jornada);
                 const valores = [
                     formatarData(data), registro.entrada || "—", registro.saidaAlmoco || "—",
@@ -654,7 +666,7 @@ async function baterPonto() {
         }
 
         function editarBatidaHoje(campo) {
-            abrirEdicao(dataHoje(), campo);
+            abrirEdicao(dataJornadaAtiva || dataHoje(), campo);
         }
 
         function abrirEdicao(data, campoFoco = null) {
@@ -722,7 +734,7 @@ async function baterPonto() {
         }
 
         function excluirBatidaHoje(campo) {
-            excluirBatida(dataHoje(), campo);
+            excluirBatida(dataJornadaAtiva || dataHoje(), campo);
         }
 
         async function excluirBatidaEmEdicao(campo) {
@@ -789,7 +801,7 @@ async function baterPonto() {
             });
         }
 
-        function abrirModalExtra(data = dataHoje(), indice = null) {
+        function abrirModalExtra(data = dataJornadaAtiva || dataHoje(), indice = null) {
             const registro = registros[data];
             const extra = indice === null ? null : registro?.extras?.[indice];
             document.getElementById("dataExtra").value = data;
@@ -871,7 +883,7 @@ async function baterPonto() {
 
         function exportarJSON() {
             if (!pontoServidorPronto) return mostrarMensagem("Aguarde a conexão com o banco de dados para fazer backup.");
-            const backup = { versao: 1, exportadoEm: new Date().toISOString(), configuracoes, registros };
+            const backup = { versao: 2, exportadoEm: new Date().toISOString(), configuracoes, registros, jornadasPrevistas };
             baixarArquivo(`backup-meu-ponto-${dataHoje()}.json`, JSON.stringify(backup, null, 2), "application/json;charset=utf-8");
             mostrarMensagem("Backup JSON baixado.");
         }
@@ -883,7 +895,7 @@ async function baterPonto() {
             Object.keys(registros).filter(data => !mes || data.startsWith(mes)).sort().forEach(data => {
                 const registro = registros[data];
                 const trabalhado = minutosTrabalhados(registro);
-                const jornada = minutosDeHorario(configuracoes.jornada) || 480;
+                const jornada = jornadaPrevistaDoDia(data);
                 linhas.push([formatarData(data), registro.entrada || "", registro.saidaAlmoco || "", registro.retornoAlmoco || "", registro.saida || "", (registro.extras || []).map(item => `${item.horario} ${item.descricao || "Batida extra"}`).join(" | "), formatarDuracao(trabalhado), saldoDaJornada(registro, jornada)]);
             });
             const csv = "\uFEFF" + linhas.map(linha => linha.map(valor => `"${String(valor).replace(/"/g, '""')}"`).join(";")).join("\r\n");
@@ -914,6 +926,7 @@ async function baterPonto() {
                     body: JSON.stringify({
                         justificativa,
                         registros: conteudo.registros,
+                        ...(conteudo.jornadasPrevistas ? { jornadasPrevistas: conteudo.jornadasPrevistas } : {}),
                         ...(conteudo.configuracoes ? { configuracoes: conteudo.configuracoes } : {})
                     })
                 });
