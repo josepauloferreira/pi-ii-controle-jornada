@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const db = require("./database");
 const { configureAuth } = require("./auth");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior } = require("./jornada.cjs");
 
 const app = express();
 const porta = Number(process.env.PORT) || 3000;
@@ -86,8 +86,44 @@ app.use("/api", (req, res, next) => {
 
 // Marcações normais são originadas no servidor, jamais no relógio do navegador.
 // A transação serializa leitura do estado, inclusão do evento e projeção do dia.
+const buscarPrevista = db.prepare("SELECT minutos, origem FROM jornada_prevista_dia WHERE data = ?");
+const congelarPrevista = db.prepare(
+  "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) " +
+  "SELECT ?, CAST(SUBSTR(jornada,1,2) AS INTEGER)*60 + CAST(SUBSTR(jornada,4,2) AS INTEGER), ?, ? " +
+  "FROM configuracoes WHERE id=1"
+);
+const buscarEntradaOriginal = db.prepare(
+  "SELECT instante FROM marcacoes_servidor WHERE data = ? AND campo = 'entrada'"
+);
+
+function diaDaJornada(agora = new Date()) {
+  const hoje = horarioDoServidor(agora).data;
+  const anterior = diaAnterior(hoje);
+  const atual = buscarDia.get(hoje);
+  const ontem = buscarDia.get(anterior);
+  const entrada = buscarEntradaOriginal.get(anterior);
+  return resolverDataJornada(agora, atual && converterRegistro(atual),
+    ontem && converterRegistro(ontem), entrada?.instante);
+}
+
+app.get("/api/jornada/ativa", (_req, res) => {
+  const data = diaDaJornada();
+  const row = buscarDia.get(data);
+  res.json({ data, registro: row ? converterRegistro(row) : registroVazio() });
+});
+
+app.get("/api/jornada/previstas", (_req, res) => {
+  const previstas = {};
+  for (const { data, minutos, origem } of db.prepare(
+    "SELECT data, minutos, origem FROM jornada_prevista_dia ORDER BY data"
+  ).all()) previstas[data] = { minutos, origem };
+  res.json(previstas);
+});
+
 const registrarMarcacao = db.transaction(() => {
-  const { data, horario, instante } = horarioDoServidor();
+  const agora = new Date();
+  const { horario, instante } = horarioDoServidor(agora);
+  const data = diaDaJornada(agora);
   const anterior = buscarDia.get(data);
   const antigo = anterior ? converterRegistro(anterior) : registroVazio();
   const campo = proximoCampo(antigo);
@@ -101,16 +137,16 @@ const registrarMarcacao = db.transaction(() => {
     return { erro: "Aguarde pelo menos um minuto entre marcações.", status: 409 };
   }
 
-  // A chave (data, campo) impede sobrescrever ou repetir a marcação original.
   db.prepare("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)")
     .run(data, campo, horario, instante);
   const atualizado = { ...antigo, [campo]: horario };
   salvarDia.run(data, atualizado.entrada, atualizado.saidaAlmoco,
     atualizado.retornoAlmoco, atualizado.saida, JSON.stringify(atualizado.extras));
+  congelarPrevista.run(data, "registrada", instante);
   db.prepare(
     "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)"
   ).run(data, JSON.stringify(antigo), JSON.stringify(atualizado), "Marcação automática pelo servidor", instante);
-  return { data, campo, horario, instante, registro: atualizado };
+  return { data, campo, horario, instante, registro: atualizado, jornadaPrevista: buscarPrevista.get(data) };
 });
 
 app.post("/api/jornada/marcar", (req, res) => {
@@ -177,6 +213,7 @@ const alterarRegistro = db.transaction((data, registro, justificativa) => {
     retornoAlmoco: registro.retornoAlmoco, saida: registro.saida, extras };
   salvarDia.run(data, novo.entrada, novo.saidaAlmoco, novo.retornoAlmoco,
     novo.saida, JSON.stringify(novo.extras));
+  congelarPrevista.run(data, "importado", new Date().toISOString());
   db.prepare(
     "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'correcao', ?, ?, ?, ?)"
   ).run(data, JSON.stringify(anterior), JSON.stringify(novo), justificativa.trim(), new Date().toISOString());
