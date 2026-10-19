@@ -149,6 +149,21 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
       assert.equal((await request(0,'/api/registros/2026-10-17','PUT',record,session)).status,201);
       assert.deepEqual(await (await request(1,'/api/registros/2026-10-17','GET',undefined,session)).json(),record);
     });
+    await t.test('marcacoes simultaneas em duas instancias nao duplicam eventos',async()=>{
+      const responses = await Promise.all([
+        request(0,'/api/jornada/marcar','POST',{},session),
+        request(1,'/api/jornada/marcar','POST',{},session)
+      ]);
+      assert.deepEqual(responses.map(r=>r.status).sort(),[201,409]);
+      const dia = (await responses.find(r=>r.status===201).json()).data;
+      const eventos = await clients[0].execute({
+        sql: 'SELECT COUNT(*) AS total FROM marcacoes_servidor WHERE data = ?', args:[dia]
+      });
+      assert.equal(Number(eventos.rows[0].total),1);
+      const history = await request(1,'/api/jornada/historico/'+dia,'GET',undefined,session);
+      assert.equal(history.status,200);
+      assert.equal((await history.json()).eventos.length,1);
+    });
     await t.test('rollback de backup após falha real no meio da transação',async()=>{
       await clients[0].execute("CREATE TRIGGER rejeitar_teste BEFORE INSERT ON registros WHEN NEW.data = '2026-10-18' BEGIN SELECT RAISE(ABORT, 'teste privado'); END");
       const old=console.error; const logs=[];console.error=(...args)=>logs.push(args.join(' '));
