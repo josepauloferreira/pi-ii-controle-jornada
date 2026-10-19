@@ -50,6 +50,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS registro_auditoria_data ON registro_auditoria(data, id);
 `);
 
+// Snapshot diario: datas legadas recebem a jornada atual como estimativa
+// congelada no momento desta migracao; nao se presume o plano historico real.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS jornada_prevista_dia (
+    data TEXT PRIMARY KEY,
+    minutos INTEGER NOT NULL CHECK(minutos BETWEEN 0 AND 1439),
+    origem TEXT NOT NULL CHECK(origem IN ('registrada','legado_estimado','importado')),
+    definido_em TEXT NOT NULL
+  );
+  INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em)
+  SELECT r.data,
+    CAST(SUBSTR(c.jornada,1,2) AS INTEGER) * 60 + CAST(SUBSTR(c.jornada,4,2) AS INTEGER),
+    'legado_estimado', CURRENT_TIMESTAMP
+  FROM registros r CROSS JOIN configuracoes c WHERE c.id = 1;
+`);
+
 // As tabelas de ponto existentes permanecem inalteradas.
 db.exec(`
   CREATE TABLE IF NOT EXISTS conta (
