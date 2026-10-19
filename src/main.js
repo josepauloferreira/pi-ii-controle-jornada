@@ -504,6 +504,7 @@ async function baterPonto() {
                     });
                 }
                 jornadasPrevistas = await requisitarAPI("/api/jornada/previstas");
+                dataJornadaAtiva = (await requisitarAPI("/api/jornada/ativa")).data;
                 return true;
             } catch (erro) {
                 console.error("Falha ao salvar registros no banco de dados:", erro);
