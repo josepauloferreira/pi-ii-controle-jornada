@@ -112,5 +112,8 @@ test("restauração de backup JSON com configurações e registros fictícios", 
   await expect(page.locator("#nomeFuncionario")).toHaveValue("Demonstração E2E");
   await expect(page.locator("#entrada")).toHaveText("08:00");
   await expect(page.locator("#horasHoje")).toHaveText("06:00");
-  await expect(page.locator("#saldoHoje")).toHaveText("00:00");
+  // O dia já possuía marcação nativa com jornada congelada em 08:00.
+  // Restaurar um JSON legado não pode reescrever o plano originalmente registrado.
+  await expect(page.locator("#jornadaHoje")).toHaveText("08:00");
+  await expect(page.locator("#saldoHoje")).toHaveText("-02:00");
 });
