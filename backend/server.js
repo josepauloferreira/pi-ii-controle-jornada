@@ -247,16 +247,26 @@ app.put("/api/configuracoes", (req, res) => {
 
 // Restauração completa em transação: falha na validação não altera o banco.
 const restaurarBackup = db.transaction((backup) => {
+  const anteriores = new Map(buscarTodos.all().map(linha => [linha.data, converterRegistro(linha)]));
   db.prepare("DELETE FROM registros").run();
   for (const [data, registro] of Object.entries(backup.registros)) {
     const extras = registro.extras.map(extra => ({
-      horario: extra.horario,
-      descricao: extra.descricao ?? "Batida extra"
+      horario: extra.horario, descricao: extra.descricao ?? "Batida extra"
     }));
-    salvarDia.run(
-      data, registro.entrada, registro.saidaAlmoco,
-      registro.retornoAlmoco, registro.saida, JSON.stringify(extras)
-    );
+    salvarDia.run(data, registro.entrada, registro.saidaAlmoco,
+      registro.retornoAlmoco, registro.saida, JSON.stringify(extras));
+  }
+  const posteriores = new Map(buscarTodos.all().map(linha => [linha.data, converterRegistro(linha)]));
+  const evento = db.prepare(
+    "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'restauracao', ?, ?, ?, ?)"
+  );
+  const agora = new Date().toISOString();
+  for (const data of new Set([...anteriores.keys(), ...posteriores.keys()])) {
+    const antes = anteriores.get(data) ?? null;
+    const depois = posteriores.get(data) ?? null;
+    if (JSON.stringify(antes) !== JSON.stringify(depois)) {
+      evento.run(data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), agora);
+    }
   }
   if (backup.configuracoes) {
     const config = backup.configuracoes;
@@ -278,8 +288,8 @@ app.put("/api/backup", (req, res) => {
     && (config.inicioSemana === "0" || config.inicioSemana === "1")
   );
 
-  if (!registrosValidos || !configValida) {
-    return res.status(400).json({ erro: "Backup inválido. Confira registros e configurações." });
+  if (!registrosValidos || !configValida || !justificativaValida(backup?.justificativa)) {
+    return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
   }
 
   restaurarBackup(backup);
