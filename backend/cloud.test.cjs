@@ -132,6 +132,64 @@ test("migração conserva registros antigos e congela jornada estimada apenas um
   }
 });
 
+test("HTTP libSQL: expediente iniciado antes da meia-noite termina no mesmo dia", async () => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "jornada-noturna-"));
+  const client = createClient({ url: "file:" + path.join(folder, "test.db") });
+  let clock = new Date("2026-10-19T02:45:00.000Z"); // 18/10 às 23:45 em São Paulo
+  const server = createCloudApp({ client, now: () => clock }).listen(0, "127.0.0.1");
+  try {
+    await once(server, "listening");
+    const url = "http://127.0.0.1:" + server.address().port;
+    const send = (path, method = "GET", data, cookie, csrf) => fetch(url + path, {
+      method, headers: {
+        ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(cookie ? { Cookie: cookie, "X-CSRF-Token": csrf } : {})
+      },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) })
+    });
+    const reg = await send("/api/auth/register", "POST", {
+      usuario: "noturno.teste", senha: "senha-noturna-ficticia-123",
+      confirmarSenha: "senha-noturna-ficticia-123"
+    });
+    assert.equal(reg.status, 200);
+    const cookie = reg.headers.get("set-cookie").split(";")[0];
+    const { csrfToken: csrf } = await reg.json();
+    const marcar = async (expected) => {
+      const r = await send("/api/jornada/marcar", "POST", {}, cookie, csrf);
+      assert.equal(r.status, 201);
+      const body = await r.json();
+      assert.equal(body.data, "2026-10-18");
+      assert.equal(body.campo, expected);
+      assert.equal(body.jornadaPrevista.minutos, 480);
+      return body;
+    };
+    const first = await marcar("entrada");
+    assert.equal(first.horario, "23:45");
+    clock = new Date("2026-10-19T04:00:00.000Z"); // 01:00
+    assert.equal((await (await send("/api/jornada/ativa", "GET", undefined, cookie, csrf)).json()).data, "2026-10-18");
+    const second = await marcar("saidaAlmoco");
+    assert.equal(second.horario, "01:00");
+    clock = new Date("2026-10-19T04:45:00.000Z"); // 01:45
+    await marcar("retornoAlmoco");
+    clock = new Date("2026-10-19T09:00:00.000Z"); // 06:00
+    await marcar("saida");
+    const day = await (await send("/api/registros/2026-10-18", "GET", undefined, cookie, csrf)).json();
+    assert.deepEqual([day.entrada, day.saidaAlmoco, day.retornoAlmoco, day.saida],
+      ["23:45","01:00","01:45","06:00"]);
+    assert.equal((await (await send("/api/jornada/ativa", "GET", undefined, cookie, csrf)).json()).data, "2026-10-19");
+    const config = { nome: "Noturno", jornada: "06:00", inicioSemana: "1" };
+    assert.equal((await send("/api/configuracoes", "PUT", config, cookie, csrf)).status, 200);
+    const plans = await (await send("/api/jornada/previstas", "GET", undefined, cookie, csrf)).json();
+    assert.deepEqual(plans["2026-10-18"], { minutos: 480, origem: "registrada" });
+    const eventos = await (await send("/api/jornada/historico/2026-10-18", "GET", undefined, cookie, csrf)).json();
+    assert.equal(eventos.eventos.length, 4);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
+    client.close();
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
 test('contrato completo: libSQL em arquivo temporário', async t => {
   const folder = fs.mkdtempSync(path.join(os.tmpdir(),'jornada-cloud-contract-'));
   const client = createClient({url:'file:'+path.join(folder,'test.db')});
