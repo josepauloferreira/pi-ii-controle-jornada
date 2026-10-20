@@ -1,0 +1,22 @@
+import { brand, button, icon, passwordField } from '../ui/components.js';
+import { overviewContent } from './app.js';
+import { escape, today } from '../lib/format.js';
+
+export function landing(state) {
+  const date = today();
+  const sample = { activeDate: date, records: { [date]: { entrada: '08:30', saidaAlmoco: '12:00', retornoAlmoco: '13:00', saida: '17:30', extras: [] } }, plans: { [date]: { minutos: 480 } }, settings: { jornada: '08:00' } };
+  return `<div class="landing"><header class="landing-header"><div class="public-container">${brand()}<nav aria-label="Navegação da página inicial"><a href="#como-funciona" class="how-link">Como funciona</a><a href="#/acesso" class="btn">Entrar</a>${state.registrationAvailable ? '<a href="#/acesso" class="btn btn-primary">Criar conta</a>' : ''}</nav></div></header>
+    <main id="main-content" tabindex="-1"><section class="hero public-container"><h1 id="landingTitle" tabindex="-1">Seu tempo,<br><span>bem registrado.</span></h1><p>Registre sua jornada, acompanhe suas horas e consulte seu histórico em um só lugar.</p><a href="#/acesso" class="btn btn-primary hero-cta">Acessar Meu Ponto ${icon('arrow')}</a></section>
+    <section class="public-container preview-section" aria-label="Prévia da aplicação"><div class="preview-label"><h2>Visão Geral</h2><span>Prévia ilustrativa · dados de exemplo</span></div><div class="app-preview">${overviewContent(sample, { preview: true })}</div></section>
+    <section class="public-container how-section" id="como-funciona"><h2>Como funciona</h2><div class="feature-grid"><article>${icon('clock')}<h3>Registre sua jornada.</h3><p>Entrada, pausa, retorno e saída, com os horários das marcações definidos pelo servidor.</p></article><article>${icon('balance')}<h3>Acompanhe suas horas.</h3><p>Consulte as horas trabalhadas, a jornada prevista e o saldo de cada expediente.</p></article><article>${icon('history')}<h3>Preserve seu histórico.</h3><p>Revise jornadas anteriores, consulte alterações justificadas e baixe seus registros.</p></article></div></section></main><footer class="landing-footer"><div class="public-container"><span>Meu Ponto</span><p>Controle individual de jornada.</p><a href="#/acesso" class="text-link">Acessar minha conta ${icon('arrow')}</a></div></footer></div>`;
+}
+export function authentication(state) {
+  const setup = state.registrationAvailable;
+  return `<main id="main-content" class="auth-screen" tabindex="-1"><div id="authView" class="auth-layout"><aside class="auth-aside">${brand()}<div><h2>Cada horário<br>tem seu lugar.</h2><p>Registre entradas, intervalos e saídas. Consulte sua jornada sempre que precisar.</p><ol class="auth-steps"><li>Entrada</li><li>Pausa</li><li>Retorno</li><li>Saída</li></ol></div><a class="text-link" href="#/">${icon('back')} Voltar ao início</a></aside><section class="auth-panel"><h1 id="authTitle" tabindex="-1">${setup ? 'Configure seu acesso.' : 'Acesse sua jornada.'}</h1><p id="authDescription">${state.authNotice ? escape(state.authNotice) : setup ? 'Crie a conta individual que será utilizada para registrar e acompanhar sua jornada.' : 'Entre para registrar seu ponto e consultar seu histórico de horas.'}</p>
+    <form id="authForm"><div class="field"><label for="authUsuario">Usuário</label><input id="authUsuario" name="usuario" type="text" required minlength="3" maxlength="40" pattern="[a-zA-Z][a-zA-Z0-9._\\-]{2,39}" autocomplete="username" autocapitalize="none" spellcheck="false" aria-describedby="userHelp"><span class="field-help" id="userHelp">${setup ? '3 a 40 caracteres. Comece com uma letra; use letras, números, ponto, hífen ou sublinhado.' : ''}</span></div>
+    ${passwordField('authSenha', 'Senha', setup ? 'new-password' : 'current-password', setup ? 12 : 1)}
+    ${setup ? `<div id="confirmarSenhaCampo">${passwordField('authConfirmarSenha', 'Confirmar senha', 'new-password', 12)}</div>` : ''}
+    <p class="form-error" role="alert" id="authError">${escape(state.authError || '')}</p><button type="submit" class="btn btn-primary auth-submit" id="authSubmit" ${state.booting ? 'disabled' : ''}>${state.booting ? 'Verificando acesso…' : setup ? 'Criar conta' : 'Entrar'} ${icon('arrow')}</button></form>
+    ${state.authUnavailable ? button('Tentar conectar novamente', 'retry-auth', 'history', 'btn-link') : ''}
+    <p class="auth-footnote">${icon('lock')} ${setup ? 'O cadastro fica disponível apenas no primeiro acesso. Depois, entre com sua conta.' : 'Seus registros são acessíveis somente após o login.'}</p></section></div></main>`;
+}

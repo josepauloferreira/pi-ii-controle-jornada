@@ -21,6 +21,8 @@
   /* Verde indica resultado positivo; não é uma variante de ação. */
   --color-success: #17764F;
   --color-danger: #BD333C;
+  --color-danger-hover: #A32630;
+  --color-success-soft: #EAF5EE;
   --color-danger-soft: #FFF1F2;
   --color-danger-soft-hover: #FFE3E6;
   --color-danger-soft-pressed: #FFDEE2;
@@ -40,6 +42,8 @@
   --font-size-title: 2rem;
   --font-size-time: 1.5rem;
   --font-size-clock: 2.5rem;
+  --font-size-hero: 4.5rem;
+  --font-size-hero-mobile: 2.75rem;
   --font-weight-regular: 400;
   --font-weight-semibold: 600;
   --line-height-body: 1.5;
@@ -65,6 +69,14 @@
   --focus-offset: 3px;
 
   --size-control-min: 2.75rem;
+  --size-sidebar: 16rem;
+  --size-app-bar: 4rem;
+  --size-workspace-max: 80rem;
+  --size-settings-max: 56rem;
+  --size-drawer-max: 36rem;
+  --size-auth-layout: 65rem;
+  --size-mobile-nav: 5rem;
+  --size-mobile-nav-item: 3.5rem;
   --size-page-max: 70rem;
   --size-page-gutter: var(--space-6);
   --size-auth-max: 26rem;
@@ -78,6 +90,8 @@
 
   --shadow-dialog: 0 12px 40px rgb(29 29 31 / 14%);
   --shadow-notice: 0 4px 16px rgb(29 29 31 / 16%);
+  --layer-skip: 1100;
+  --layer-navigation: 100;
   --layer-dialog: 999;
   --layer-notice: 1000;
   --motion-duration: 160ms;
