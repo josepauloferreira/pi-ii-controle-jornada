@@ -1,14 +1,10 @@
 # Estratégia de testes e qualidade
 
-Este documento explica **como reproduzir as verificações** do Meu Ponto, quais comportamentos cada suíte cobre e o que ainda não está automatizado. O projeto é uma demonstração acadêmica de uso individual, não um sistema homologado de controle de ponto.
-
-> Os números abaixo são resultados **registrados em 17/10/2026**, não uma promessa de que sempre haverá exatamente a mesma quantidade de testes. Consulte o GitHub Actions para o estado do commit atual.
+Este documento explica como reproduzir as verificações do Meu Ponto e os limites das evidências. Resultados locais registrados em **20/10/2026**, com **Node.js 24.22.0 e npm 11.19.1**. As contagens não representam percentual de cobertura; o estado remoto do commit deve ser consultado no GitHub Actions.
 
 ## Início rápido
 
-Requisitos: Node.js **22.12+ ou 24.x** (preferencialmente 24 LTS), npm e dependências necessárias para instalar o módulo nativo `better-sqlite3`.
-
-Na raiz do repositório:
+Requisitos: Node.js **22.12+ ou 24.x**, npm e dependências para instalar o módulo nativo `better-sqlite3`. Na raiz:
 
 ```bash
 npm ci
@@ -17,120 +13,108 @@ npm --prefix backend test
 npm run test:cloud
 npm run test:unit
 npm run build
-```
-
-Os comandos de teste utilizam **arquivos SQLite/libSQL temporários**, isolados do banco local `backend/dados/jornada.db` e dos bancos Turso de Preview e Production. Não são necessárias variáveis Turso para executar as suítes.
-
-O build compila a aplicação Vite para `dist/`, ignorada pelo Git; não equivale a um teste de navegador.
-
-Para executar os cenários reais de navegação com **Chromium local**:
-
-```bash
 npm --prefix e2e ci
 ./e2e/node_modules/.bin/playwright install chromium
 npm run test:e2e
 ```
 
-Os testes E2E iniciam Vite e Express automaticamente em `127.0.0.1:5173` e `127.0.0.1:3000`, usando **banco SQLite exclusivo e descartável**. Deixe as portas livres. Em Linux CI, use `playwright install --with-deps chromium` para instalar as bibliotecas do navegador. Detalhes em [e2e/README.md](e2e/README.md).
+As suítes usam arquivos SQLite/libSQL temporários, isolados de `backend/dados/jornada.db` e dos bancos Turso de Preview e produção. Não exigem credenciais Turso. O build gera `dist/` e verifica a compilação; a navegação é exercitada separadamente pelo Playwright.
+
+Os E2E iniciam Vite e Express em `127.0.0.1:5173` e `127.0.0.1:3000`; mantenha as portas livres. Em Linux CI, a instalação usa `playwright install --with-deps chromium`. O runner encerra os servidores e descarta o SQLite. Detalhes em [e2e/README.md](e2e/README.md).
 
 ## Matriz de verificações
 
-| Camada | Comando ou procedimento | Arquivos | Resultado registrado |
+| Camada | Comando | Arquivos | Resultado local |
 | --- | --- | --- | --- |
-| API Express + SQLite | `npm --prefix backend test` | `backend/auth.test.js`, `backend/contract.test.cjs` | **17 aprovados, 0 falhas** |
-| API Express + libSQL e entrada da Vercel | `npm run test:cloud` | `backend/cloud.test.cjs`, `backend/entry.test.cjs` | **41 aprovados, 0 falhas** |
-| Regras de jornada (unitários) | `npm run test:unit` | `tests/jornada.test.js` → `src/jornada.js` | **12 aprovados, 0 falhas** |
-| Playwright local (E2E) | `npm run test:e2e` | `e2e/tests/jornada.spec.mjs` | **3 cenários aprovados no Chromium**; banco descartável |
-| Compilação | `npm run build` | Vite, HTML, CSS e JS | Build aprovado, saída `dist/` |
-| Preview hospedado | Requisições HTTP e Chromium/Playwright | Evidências em [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md) | **14 cenários aprovados**, não versionados como suíte E2E |
-| Produção | Verificações de disponibilidade e controle de acesso | Evidências em [VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md) | Smoke tests registrados; **não** repetição da suíte E2E completa |
+| Express + SQLite | `npm --prefix backend test` | `backend/auth.test.js`, `backend/contract.test.cjs`, `backend/jornada.test.cjs` | **24 aprovados**, 0 falhas |
+| Express + libSQL e entrada serverless | `npm run test:cloud` | `backend/cloud.test.cjs`, `backend/entry.test.cjs` | **48 aprovados**, 0 falhas |
+| Jornada e validação de backup | `npm run test:unit` | `tests/jornada.test.js`, `tests/backup.test.js` | **15 aprovados**, 0 falhas |
+| Interface com SQLite temporário | `npm run test:e2e` | `e2e/tests/jornada.spec.mjs` | **18 aprovados** no Chromium |
+| Compilação | `npm run build` | Vite, HTML, CSS e JavaScript | Aprovado |
 
-A contagem de 17/41 refere-se às asserções/subtestes reconhecidos por `node:test`, não a 58 casos unitários isolados. A maior parte da cobertura atual é de **integração HTTP**.
+A linha de base desta rodada, antes da integração da interface, passou com **23 SQLite, 46 cloud, 12 unitários e 3 E2E**, além do build. O documento anterior ainda citava resultados de 17/10/2026 (17/41/12/3); ambos são históricos. A contagem de `node:test` inclui testes e subtestes de integração, sem equivaler a casos unitários isolados.
 
-## O que os testes automatizados exercitam
+## Contrato HTTP e regras de jornada
 
-### 1. Contrato HTTP compartilhado
+[backend/api-contract.cjs](backend/api-contract.cjs) é reutilizado pelos adaptadores SQLite e libSQL.
 
-O arquivo [`backend/api-contract.cjs`](backend/api-contract.cjs) define o comportamento esperado para as **duas persistências**, sendo reutilizado por `backend/contract.test.cjs` (SQLite) e `backend/cloud.test.cjs` (libSQL).
-
-| Área | Casos verificados |
+| Área | Comportamentos exercitados |
 | --- | --- |
-| Disponibilidade e autenticação | `/api/health`, bloqueio de dados sem sessão, cadastro inicial e bloqueio do segundo cadastro |
-| Sessões | Login correto/incorreto, cookie `HttpOnly`/`SameSite=Strict`, consulta da sessão e logout |
-| Proteção de escrita | CSRF obrigatório em registro, exclusão, configurações, backup, troca de senha e logout |
-| Marcações | Criação, edição, exclusão, batidas extras, datas inválidas e horários `HH:mm` inválidos |
-| Histórico | Listagem mensal, preservação de query parameters e rejeição de filtros inválidos |
-| Configurações | Atualização, persistência e rejeição de jornada inválida |
-| Backups | Validação prévia, preservação dos dados em erro, restauração e exclusão |
-| Entradas HTTP | JSON inválido e corpo acima do limite |
-| Credenciais | Troca de senha, invalidação das sessões antigas e limite de tentativas de login |
+| Acesso | Health, cadastro único, login correto/incorreto, cookie de sessão, consulta e logout. |
+| Proteção de escrita | CSRF em registros, exclusão, configurações, backup, senha e logout. |
+| Jornada normal | Horário e data definidos pelo servidor, sequência de etapas, rejeição de parâmetros de horário do cliente e duplicação. |
+| Correções e auditoria | Justificativa de 10–500 caracteres, valores anteriores/posteriores e consulta após exclusão. |
+| Jornada prevista | Carga congelada por dia; alterar configurações preserva os dias anteriores; backup versionado. |
+| Marcações e histórico | Datas e horários válidos, extras, exclusão, listagem mensal e filtros inválidos. |
+| Backup | Validação antes da escrita, preservação em erro, cargas históricas, restauração sem justificativa manual e auditoria automática por registro alterado. |
+| HTTP e credenciais | JSON inválido, limite de payload, troca de senha, invalidação de sessões e limite de login. |
 
-### 2. Backend local SQLite
+O backend local também verifica cadastro concorrente, registros anteriores à conta e o módulo de jornada: fuso do servidor, ordem das etapas, motivos inválidos e jornada após meia-noite vinculada à data da entrada.
 
-`backend/auth.test.js` também exerce cadastro concorrente, autenticação sobre registros anteriores à criação da conta, CSRF, sessões e limite de tentativas no servidor local.
+A integração libSQL verifica cadastro concorrente por clientes independentes; sessão e dados entre instâncias; persistência após recriar o cliente; expiração; limite atômico de login; corrida entre login e troca de senha; rollback de backup; erros sem detalhes privados; e recuperação de conexão transitória. `backend/entry.test.cjs` verifica o handler de `api/index.js`, URL original, rewrite, query parameters e caminhos malformados.
 
-O banco de teste é criado em pasta temporária e removido ao concluir a suíte.
+**Limite:** libSQL é executado sobre arquivos locais descartáveis. Esta rodada não verifica rede Turso, configuração Vercel nem dados de produção.
 
-### 3. API libSQL e runtime serverless
+## Unitários do frontend
 
-`backend/cloud.test.cjs` verifica, além do contrato compartilhado:
+Os 12 testes de [src/jornada.js](src/jornada.js) exercitam `HH:mm`, minutos, pausas, expediente incompleto, saldos, virada de meia-noite, extras sem efeito automático no cálculo e duração acima de 24 horas. Os 3 testes de [src/lib/backup.js](src/lib/backup.js) verificam backup legado/noturno, rejeição de estrutura/datas/horários/extras inválidos, configurações e snapshots correspondentes aos registros.
 
-- Cadastro simultâneo por clientes independentes: apenas uma conta é criada.
-- Compartilhamento de sessão e dados entre instâncias.
-- Persistência após recriar aplicação e cliente libSQL.
-- Expiração de sessões.
-- Limite atômico sob tentativas de login concorrentes.
-- Corrida entre login e alteração de senha.
-- Rollback de backup quando ocorre falha SQL durante a transação.
-- Respostas e logs sem mensagens privadas em erros simulados.
-- Recuperação após falha transitória na inicialização da conexão.
+## Matriz E2E — 18 cenários
 
-`backend/entry.test.cjs` executa o handler de `api/index.js` com URL original e destino de rewrite, inclusive filtros de mês e rejeição de caminhos malformados.
+Playwright **1.64.1**, com versão fixada no lockfile, executa a suíte em série, com um worker e sem retries automáticos. Conta e dados são fictícios.
 
-**Limite:** esses testes utilizam libSQL sobre arquivos temporários; não substituem uma verificação de rede e configuração na Vercel com Turso remoto.
+| Caso | Fluxo e verificação principal |
+| --- | --- |
+| 1 | Landing, confirmação de senha, cadastro, marcação, correção `1830 → 18:30`, extra, CSV/JSON, reload, logout e login. |
+| 2 | Navegação em 320×600, detalhes e auditoria empilhados, Tab/Shift+Tab, Escape, retorno de foco e ações visíveis. |
+| 3 | Backup v1 com revisão e confirmação, sem textarea de justificativa, auditoria automática e carga histórica preservada. |
+| 4 | JSON inválido, cancelamento de restauração, configurações, senha atual incorreta e foco ao fechar. |
+| 5 | Exclusão cancelada e confirmada com motivo; auditoria da jornada excluída pelo drawer e consulta por data. |
+| 6 | Carregamento, falha 503 simulada e recuperação por “Tentar novamente”. |
+| 7 | Conclusão de jornada de ontem e nova consulta da data ativa; respostas da API interceptadas para simular a virada. |
+| 8 | Adição/edição/exclusão de extra sem alterar horas; remoção de etapa, bloqueio por inconsistência e correção explícita. |
+| 9 | Falha 503 simulada ao corrigir, manutenção dos dados e do formulário, nova tentativa e retorno de foco. |
+| 10 | Exportação após exclusões, ausência de snapshots órfãos e restauração do arquivo exportado. |
+| 11 | Backup dos dados locais antigos, migração de dias ausentes e preservação dos conflitos, configurações existentes e localStorage. |
+| 12 | Sessão encerrada fora da interface, escrita recebe 401, diálogos fecham e dados privados saem da tela. |
+| 13 | 320×600: extras e senha com contenção/retorno de foco, ações com 44px e sem overflow de página. |
+| 14 | Mesmas verificações em 390×600. |
+| 15 | Mesmas verificações em 768×600. |
+| 16 | Mesmas verificações em 1024×600. |
+| 17 | Mesmas verificações em 1440×600. |
+| 18 | Troca real da senha fictícia na API local, encerramento de sessão, rejeição da senha antiga e novo login. |
 
-### 4. Testes unitários de jornada e E2E local
+Os testes de erro e virada de dia usam interceptação controlada. Os demais fluxos integram o navegador à API local; o teste de senha efetua uma alteração real no banco descartável. Estes 18 cenários não são uma medição de cobertura completa nem uma reprodução integral dos testes hospedados históricos.
 
-O módulo [src/jornada.js](src/jornada.js) contém funções puras extraídas da interface, sem mudança intencional nas regras. A suíte `tests/jornada.test.js` verifica horários `HH:mm`, conversão para minutos, pausas, expediente incompleto, saldo negativo/positivo, virada de meia-noite e formatação de duração.
+## Revisão visual desta entrega
 
-O projeto [e2e/](e2e/) utiliza Playwright 1.64.1 com instalação fixada por lockfile. Os três cenários automatizam cadastro, registro, edição, extras, downloads, sessão, histórico em tela pequena e restauração de backup. Não utilizam a Vercel e não substituem os 14 cenários hospedados históricos.
+A rodada de capturas local, separada da suíte E2E versionada, registrou **100 PNGs de 20 estados em cinco larguras** (320/390/768/1024/1440px) e **300 medições**, combinadas com alturas 600/667/900px. Os registros automáticos não apontaram overflow de página, alvos menores que 44px, rótulos ausentes, baixo contraste nas amostras ou ações de diálogo fora da área visível. Não houve erro JavaScript, de console ou resposta HTTP inesperada; interações de toque emuladas em 320/390px passaram.
+
+A revisão visual Impeccable encontrou quebra interna de palavra nas métricas do drawer em 320px. Após o ajuste restrito a até 360px, houve 10 recapturas de detalhes/restauração, 30 medições sem violações e revisão das imagens de detalhes em 320/390px. O relatório encerrou o achado como resolvido, sem regressão observada nesse lote, com `remaining: clear` e `disposition: ship` para a correção pontuada. Isso não amplia a revisão para novos navegadores ou dispositivos.
+
+Logs, imagens e relatórios desta rodada ficam em `/tmp/meu-ponto-redesign-review/`, fora do Git e temporários. São evidência local, não um link hospedado permanente. Viewports, contraste amostrado e foco automatizado não substituem avaliação com leitor de tela real ou dispositivo físico.
 
 ## Integração contínua — GitHub Actions
 
-O arquivo [`.github/workflows/ci.yml`](.github/workflows/ci.yml) executa os comandos automatizados em matriz **Node.js 22 e 24**, para Pull Requests dirigidos à `main` e pushes na `main`. Também admite execução manual.
+[.github/workflows/ci.yml](.github/workflows/ci.yml) está configurado para PRs à `main`, pushes à `main` e execução manual. A matriz **Node.js 22 e 24** instala lockfiles, executa SQLite, libSQL, unitários e build. Um job Node.js 24 separado instala Chromium e executa os E2E, sem credenciais Turso/Vercel.
 
-A matriz Node.js 22 e 24 instala as dependências com lockfiles, executa as suítes SQLite e libSQL, executa os testes unitários da jornada e compila o frontend. Um job independente com Node.js 24 instala Chromium e executa o Playwright E2E. Nenhum deles recebe credenciais Turso ou Vercel.
+**Nesta entrega, os resultados acima são locais em Node.js 24.22.0. A matriz remota 22/24 e o job E2E ainda devem ser conferidos no PR final.**
 
-- [Acompanhar execuções](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml)
-- [Execução inicial bem-sucedida (Node 22 e 24)](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752)
-- [Primeira execução com unitários e Playwright, 3 E2E aprovados](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39053909867)
+- [Execuções do workflow](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml).
+- [Execução inicial histórica em Node 22/24](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39052232752).
+- [Primeira execução histórica com os 3 E2E anteriores](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39053909867).
 
-O workflow foi integrado à `main` pelo [PR #29](https://github.com/josepauloferreira/pi-ii-controle-jornada/pull/29). A aprovação dos checks e a política de proteção da `main` são assuntos distintos: configurar regras de branch ainda é uma etapa administrativa.
+## Validação hospedada histórica
 
-## Validação hospedada: evidência, não suíte reproduzível
+[VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md) registra 14 cenários de uma versão anterior: proteção Vercel, cadastro concorrente, sessão/CSRF/rate limiting, marcações, extras, persistência Turso, CSV/JSON, restauração, senha e persistência após redeploy. A evidência se refere aos commits e deployments daquele relatório; não atesta esta interface integrada.
 
-O arquivo [VALIDACAO-PREVIEW.md](VALIDACAO-PREVIEW.md) registra 14 cenários executados em uma versão anterior do Preview real, incluindo:
+[VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md) registra saúde, carregamento, cadastro inicializado e bloqueio de dados sem autenticação. Os fluxos completos com credenciais e registros reais de produção não foram repetidos nesta rodada.
 
-- Vercel Authentication e health check com acesso protegido.
-- Cadastro concorrente, login, sessão, logout, CSRF e rate limiting.
-- Criação/edição de batidas, extras, filtro de mês e dados persistidos no Turso.
-- Interação no navegador, formatação `1830 → 18:30`, exportação CSV/JSON e restauração.
-- Troca de senha, persistência após redeploy e ausência de falhas inesperadas nos fluxos verificados.
+## Limites e manutenção
 
-Esses **14 cenários hospedados** não foram transpostos integralmente para a suíte Playwright local. Os novos **3 cenários E2E versionados** são executados pela CI, mas cobrem somente a interface com Express e SQLite temporário. A validação da Vercel com Turso, proteção OIDC e rede permanece uma evidência histórica vinculada aos commits e deployments do relatório.
+- A automação de navegador usa somente Chromium local; não houve teste em Firefox/WebKit, leitor de tela real ou dispositivos físicos.
+- Não há percentual instrumentado de cobertura de código ou garantia de acessibilidade completa.
+- Não houve nova validação de rede Turso/Vercel, carga, disponibilidade contínua, recuperação de desastre ou homologação legal.
+- Suítes de integração e E2E devem manter contas e dados fictícios em bases descartáveis.
 
-O arquivo [VALIDACAO-PRODUCAO.md](VALIDACAO-PRODUCAO.md) registra verificações públicas de saúde, carregamento, cadastro já inicializado e proteção de dados sem autenticação. Os testes completos com login e manipulação de registros **não foram repetidos com credenciais reais de produção**, por decisão de segurança.
-
-## Limites e próximos testes
-
-- Não há percentual de cobertura instrumentada de código; não invente uma taxa de cobertura.
-- A suíte E2E está restrita ao Chromium local: não inclui Firefox/WebKit nem a implantação Vercel/Turso.
-- O módulo puro de cálculo tem testes unitários, mas a UI completa não possui instrumentação de cobertura.
-- Testes de carga, disponibilidade contínua, recuperação de desastre e homologação legal estão fora do escopo atual.
-- As suites de integração não devem acessar Preview/Production; utilize contas e dados fictícios em ambientes isolados.
-
-**Próxima evolução sugerida:** expandir os cenários E2E com tratamento de falhas de rede, acessibilidade, navegadores adicionais e execução em ambiente de Preview protegido, mantendo credenciais restritas e dados fictícios.
-
-## Manutenção
-
-Sempre que alterar rotas HTTP, atualize `backend/api-contract.cjs` e confirme compatibilidade em **ambos** os backends. Execute `npm --prefix backend test`, `npm run test:cloud`, `npm run test:unit`, `npm run test:e2e` e `npm run build` antes de abrir PR. Para publicação protegida e rotação de credenciais, consulte [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md).
+Ao alterar rotas, atualizar o contrato compartilhado e verificar ambos os backends. Antes do PR, executar SQLite, cloud, unitários, E2E e build. Para publicação e credenciais, consultar [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md).

@@ -18,6 +18,7 @@ export function createJourneyDialogs({ getState, refresh, notify, afterPassword 
     dialog.setBusy(true);
     try {
       await work();
+      if (!getState().user) return;
       const updated = await refresh();
       refreshOpenViews();
       dialog.setBusy(false);

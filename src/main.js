@@ -194,18 +194,27 @@ async function loadData({ silent = false, offerLegacy = false } = {}) {
 async function punch() {
   if (state.loading || state.marking || state.error) return;
   state.marking = true;
+  const current = generation;
   const btn = document.querySelector('#btnBaterPonto');
   if (btn) { btn.disabled = true; btn.textContent = 'Registrando…'; btn.setAttribute('aria-busy', 'true'); }
   try {
     const data = await request('/api/jornada/marcar', { method: 'POST', data: {} });
+    if (current !== generation) return;
     state.records[data.data] = data.registro;
     state.plans[data.data] = data.jornadaPrevista;
     state.activeDate = data.data;
+    // O servidor decide se a próxima jornada pertence a um novo dia.
+    try {
+      const active = await request('/api/jornada/ativa');
+      if (current !== generation) return;
+      state.activeDate = active.data;
+    } catch { if (current !== generation) return; }
     state.marking = false;
     render();
     document.querySelector('#btnBaterPonto')?.focus({ preventScroll: true });
     notify(`Ponto registrado pelo servidor às ${data.horario}.`);
   } catch (failure) {
+    if (current !== generation) return;
     state.marking = false;
     if (state.user) await loadData({ silent: true });
     notify(failure.message || 'Não foi possível registrar o ponto. Tente novamente.');
@@ -352,5 +361,13 @@ window.addEventListener('hashchange', () => {
   if (['como-funciona', 'main-content'].includes(route())) return;
   render(true);
 });
-window.setInterval(updateClock, 1000);
+let lastDay = today();
+window.setInterval(() => {
+  updateClock();
+  const day = today();
+  if (day !== lastDay && state.user && !state.loading && !state.marking && route() !== 'configuracoes' && !document.querySelector('dialog[open]')) {
+    lastDay = day;
+    void loadData({ silent: true });
+  }
+}, 1000);
 void startAccess();

@@ -218,6 +218,135 @@ test('carregamento, erro da API e recuperação sem renderizar dados fictícios'
   await expect(page.locator('#entrada')).toHaveText('08:00');
 });
 
+test('a interface segue a data ativa do servidor ao concluir uma jornada de ontem', async ({ page }) => {
+  await login(page);
+  const today = await page.evaluate(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date()));
+  const previous = new Date(today + 'T12:00:00Z');
+  previous.setUTCDate(previous.getUTCDate() - 1);
+  const date = previous.toISOString().slice(0, 10);
+  const record = { entrada: '21:00', saidaAlmoco: '23:00', retornoAlmoco: '23:30', saida: null, extras: [] };
+  await fixture(page, date, record);
+  let finished = false;
+  await page.route('**/api/jornada/ativa', r => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: finished ? today : date, registro: record }) }));
+  await page.route('**/api/jornada/marcar', async r => {
+    expect(r.request().postDataJSON()).toEqual({});
+    finished = true;
+    await r.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ data: date, campo: 'saida', horario: '00:30', instante: today + 'T03:30:00Z', registro: { ...record, saida: '00:30' }, jornadaPrevista: { minutos: 480, origem: 'registrada' } }) });
+  });
+  await page.reload();
+  await expect(page.locator('#entrada')).toHaveText('21:00');
+  await expect(page.locator('#btnBaterPonto')).toHaveText('Registrar saída');
+  await page.locator('#btnBaterPonto').click();
+  // Após concluir ontem, a próxima data ativa vem novamente da API, sem adivinhação no cliente.
+  await expect(page.locator('#entrada')).toHaveText('08:00');
+  await expect(page.locator('#btnBaterPonto')).toHaveText('Jornada concluída');
+});
+
+test('edição e exclusão de extras preservam as horas e a correção mantém a ordem explícita', async ({ page }) => {
+  await login(page);
+  await page.getByRole('button', { name: 'Gerenciar extras', exact: true }).click();
+  await page.locator('#horarioExtra').fill('19:30');
+  await page.locator('#descricaoExtra').fill('Descrição fictícia inicial');
+  await page.locator('#extraReason').fill(reason);
+  await page.getByRole('button', { name: 'Adicionar batida', exact: true }).click();
+  await expect(page.locator('#horasHoje')).toHaveText('06:00');
+  await page.getByRole('button', { name: 'Gerenciar extras', exact: true }).click();
+  await page.getByRole('button', { name: 'Editar batida extra das 19:30' }).click();
+  await page.locator('#horarioExtraEdit').fill('20:00');
+  await page.locator('#descricaoExtraEdit').fill('Descrição fictícia corrigida');
+  await page.locator('#extraReasonEdit').fill(reason);
+  await page.getByRole('button', { name: 'Salvar batida', exact: true }).click();
+  await expect(page.locator('#modalExtra [data-extra-list]')).toContainText('20:00');
+  await page.getByRole('button', { name: 'Excluir batida extra das 20:00' }).click();
+  await page.locator('#deleteReason').fill(reason);
+  await page.getByRole('button', { name: 'Confirmar exclusão' }).click();
+  await expect(page.locator('#modalExtra [data-extra-list]')).toContainText('Nenhuma');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#horasHoje')).toHaveText('06:00');
+  await page.getByRole('button', { name: 'Excluir retorno', exact: true }).click();
+  await page.locator('#deleteReason').fill(reason);
+  await page.getByRole('button', { name: 'Confirmar exclusão' }).click();
+  await expect(page.locator('#retornoAlmoco')).toHaveText('--:--');
+  await expect(page.locator('#btnBaterPonto')).toBeDisabled();
+  await expect(page.locator('#btnBaterPonto')).toHaveText('Correção necessária');
+  await page.getByRole('button', { name: 'Corrigir horários', exact: true }).click();
+  await page.locator('input[name="campo"][value="retornoAlmoco"]').check();
+  await page.locator('#editHorario').fill('13:00');
+  await page.locator('#editReason').fill(reason);
+  await page.getByRole('button', { name: 'Salvar correção', exact: true }).click();
+  await expect(page.locator('#horasHoje')).toHaveText('06:00');
+  await expect(page.locator('#saldoHoje')).toHaveText('-02:00');
+});
+
+test('falha ao corrigir mantém os dados e permite nova tentativa no mesmo modal', async ({ page }) => {
+  await login(page);
+  await page.locator('#editarEntrada').click();
+  await page.locator('#editHorario').fill('07:45');
+  await page.locator('#editReason').fill(reason);
+  await page.route('**/api/registros/*', r => r.fulfill({ status: 503, contentType: 'application/json', body: '{"erro":"Falha fictícia ao salvar."}' }));
+  await page.getByRole('button', { name: 'Salvar correção', exact: true }).click();
+  await expect(page.locator('#modalEdicao [data-dialog-error]')).toContainText('Falha fictícia ao salvar');
+  await expect(page.locator('#entrada')).toHaveText('08:00');
+  await expect(page.locator('#editHorario')).toHaveValue('07:45');
+  await page.unroute('**/api/registros/*');
+  await page.locator('#editHorario').fill('08:00');
+  await page.getByRole('button', { name: 'Salvar correção', exact: true }).click();
+  await expect(page.locator('#modalEdicao')).toHaveCount(0);
+  await expect(page.locator('#editarEntrada')).toBeFocused();
+});
+
+test('backup exportado após exclusões pode ser restaurado e não inclui snapshots órfãos', async ({ page }) => {
+  await login(page, 'configuracoes');
+  const [file] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Fazer backup', exact: true }).click()]);
+  const content = await readFile(await file.path());
+  const data = JSON.parse(content.toString());
+  expect(Object.keys(data.jornadasPrevistas).every(date => Object.hasOwn(data.registros, date))).toBe(true);
+  await page.locator('#arquivoJSON').setInputFiles({ name: 'reimportar-ficticio.json', mimeType: 'application/json', buffer: content });
+  await expect(page.locator('#restoreModal')).toBeVisible();
+  await page.locator('#confirmRestore').check();
+  await page.getByRole('button', { name: 'Restaurar backup', exact: true }).click();
+  await expect(page.locator('#restoreModal')).toHaveCount(0);
+  await expect(page.locator('#nomeFuncionario')).toHaveValue('Nome fictício atualizado');
+});
+
+test('migração preserva dados locais, conflitos e configurações existentes', async ({ page }) => {
+  await page.addInitScript(() => {
+    const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Sao_Paulo' }).format(new Date());
+    const record = { entrada: '01:00', saidaAlmoco: null, retornoAlmoco: null, saida: '03:00', extras: [] };
+    localStorage.setItem('meu_ponto_registros', JSON.stringify({ '2026-07-14': record, [today]: record }));
+    localStorage.setItem('meu_ponto_config', JSON.stringify({ nome: 'Local fictício', jornada: '04:00', inicioSemana: '1' }));
+  });
+  await login(page);
+  const migration = page.getByRole('dialog', { name: 'Dados antigos neste navegador' });
+  await expect(migration).toBeVisible();
+  const [file] = await Promise.all([page.waitForEvent('download'), migration.getByRole('button', { name: 'Baixar backup local antigo' }).click()]);
+  expect(JSON.parse(await readFile(await file.path(), 'utf8')).registros['2026-07-14'].entrada).toBe('01:00');
+  await migration.getByRole('button', { name: 'Copiar dados ausentes' }).click();
+  await expect(migration).toHaveCount(0);
+  await expect(page.locator('#entrada')).toHaveText('08:00');
+  await goto(page, 'historico');
+  await page.locator('#mesFiltro').fill('2026-07');
+  await expect(page.getByRole('button', { name: 'Ver detalhes de 14/07/2026' })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('meu_ponto_registros'))['2026-07-14'].entrada)).toBe('01:00');
+  await goto(page, 'configuracoes');
+  await expect(page.locator('#nomeFuncionario')).toHaveValue('Nome fictício atualizado');
+});
+
+test('sessão expirada fecha diálogos e remove os dados privados da interface', async ({ page }) => {
+  await login(page);
+  await page.locator('#editarEntrada').click();
+  await page.locator('#editReason').fill(reason);
+  await page.evaluate(async () => {
+    const session = await (await fetch('/api/auth/me')).json();
+    await fetch('/api/auth/logout', { method: 'POST', headers: { 'X-CSRF-Token': session.csrfToken } });
+  });
+  await page.getByRole('button', { name: 'Salvar correção', exact: true }).click();
+  await expect(page.locator('#authDescription')).toContainText('Sua sessão terminou');
+  await expect(page.locator('#appView')).toHaveCount(0);
+  await expect(page.locator('dialog')).toHaveCount(0);
+  await expect(page.locator('#screen')).not.toContainText('Nome fictício atualizado');
+});
+
 for (const width of [320, 390, 768, 1024, 1440]) {
   test(`responsividade e ações dos modais em ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 600 });
