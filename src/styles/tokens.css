@@ -1,0 +1,85 @@
+:root {
+  color-scheme: light;
+
+  /* Marca, superfícies e conteúdo. */
+  --color-canvas: #F5F5F7;
+  --color-surface: #FFFFFF;
+  --color-surface-subtle: #FAFAFC;
+  --color-text: #1D1D1F;
+  --color-muted: #515159;
+  --color-border: #E5E5EA;
+  --color-control-border: #86868B;
+  --color-control-border-hover: var(--color-muted);
+  --color-primary: #0066CC;
+  --color-primary-hover: #005BB5;
+  --color-primary-pressed: #004F9E;
+  --color-on-primary: var(--color-surface);
+  --color-primary-soft: #EAF3FF;
+  --color-primary-soft-hover: #DCEBFF;
+  --color-focus: #0071E3;
+
+  /* Verde indica resultado positivo; não é uma variante de ação. */
+  --color-success: #17764F;
+  --color-danger: #BD333C;
+  --color-danger-soft: #FFF1F2;
+  --color-danger-soft-hover: #FFE3E6;
+  --color-danger-soft-pressed: #FFDEE2;
+  --color-disabled-surface: var(--color-border);
+  --color-disabled-text: var(--color-muted);
+  --color-disabled-border: var(--color-control-border);
+  --color-overlay: rgb(29 29 31 / 40%);
+  --color-notice-surface: var(--color-text);
+  --color-notice-text: var(--color-surface);
+
+  --font-family-ui: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-caption: 0.8125rem;
+  --font-size-label: 0.875rem;
+  --font-size-body: 1rem;
+  --font-size-section: 1.25rem;
+  --font-size-title-mobile: 1.625rem;
+  --font-size-title: 2rem;
+  --font-size-time: 1.5rem;
+  --font-size-clock: 2.5rem;
+  --font-weight-regular: 400;
+  --font-weight-semibold: 600;
+  --line-height-body: 1.5;
+  --line-height-compact: 1.25;
+  --line-height-heading: 1.2;
+  --letter-spacing-heading: -0.025em;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-pill: 9999px;
+  --border-width: 1px;
+  --focus-width: 3px;
+  --focus-offset: 3px;
+
+  --size-control-min: 2.75rem;
+  --size-page-max: 70rem;
+  --size-page-gutter: var(--space-6);
+  --size-auth-max: 26rem;
+  --size-dialog-max: 34rem;
+  --size-notice-max: 27rem;
+  --size-summary-min: 18rem;
+  --size-summary-compact-min: 16rem;
+  --size-filter-min: 11rem;
+  --size-table-min: 56rem;
+  --size-extras-list-max: 16rem;
+
+  --shadow-dialog: 0 12px 40px rgb(29 29 31 / 14%);
+  --shadow-notice: 0 4px 16px rgb(29 29 31 / 16%);
+  --layer-dialog: 999;
+  --layer-notice: 1000;
+  --motion-duration: 160ms;
+  --motion-easing: ease-out;
+}
