@@ -76,4 +76,7 @@ function previstasValidas(previstas, registros) {
   );
 }
 
-module.exports = { CAMPOS, FUSO, horarioDoServidor, proximoCampo, justificativaValida, registroVazio, diaAnterior, resolverDataJornada, minutosPlanejados, previstasValidas };
+// A confirmação do backup é auditada pelo servidor, sem exigir texto do usuário.
+const JUSTIFICATIVA_RESTAURACAO = "Restauração de backup confirmada pelo usuário.";
+
+module.exports = { CAMPOS, FUSO, horarioDoServidor, proximoCampo, justificativaValida, registroVazio, diaAnterior, resolverDataJornada, minutosPlanejados, previstasValidas, JUSTIFICATIVA_RESTAURACAO };

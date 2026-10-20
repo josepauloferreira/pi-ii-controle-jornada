@@ -3,7 +3,7 @@
 // Adaptador da API para Vercel Functions + Turso.
 // O backend local (backend/server.js com better-sqlite3) permanece inalterado.
 const express = require("express");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados, JUSTIFICATIVA_RESTAURACAO } = require("./jornada.cjs");
 const crypto = require("node:crypto");
 
 const COOKIE_NAME = "meu_ponto_sessao";
@@ -463,9 +463,8 @@ function createCloudApp({ client: suppliedClient, now: clock } = {}) {
     const ok = registros && typeof registros === "object" && !Array.isArray(registros) &&
       Object.entries(registros).every(([date, record]) => validDate(date) && validRecord(record)) &&
       (configuracoes === undefined || validSettings(configuracoes)) &&
-      justificativaValida(backup?.justificativa) &&
       previstasValidas(backup?.jornadasPrevistas, registros);
-    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
+    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e jornadas previstas." });
 
     const db = req.cloudDb;
     const anteriores = await db.execute("SELECT * FROM registros ORDER BY data");
@@ -496,7 +495,7 @@ function createCloudApp({ client: suppliedClient, now: clock } = {}) {
       if (JSON.stringify(antes) !== JSON.stringify(depois)) {
         statements.push(sql(
           "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'restauracao', ?, ?, ?, ?)",
-          [data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), instante]
+          [data, JSON.stringify(antes), JSON.stringify(depois), JUSTIFICATIVA_RESTAURACAO, instante]
         ));
       }
     }

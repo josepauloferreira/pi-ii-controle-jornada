@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const db = require("./database");
 const { configureAuth } = require("./auth");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados, JUSTIFICATIVA_RESTAURACAO } = require("./jornada.cjs");
 
 const app = express();
 const porta = Number(process.env.PORT) || 3000;
@@ -306,7 +306,7 @@ const restaurarBackup = db.transaction((backup) => {
     const antes = anteriores.get(data) ?? null;
     const depois = posteriores.get(data) ?? null;
     if (JSON.stringify(antes) !== JSON.stringify(depois)) {
-      evento.run(data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), agora);
+      evento.run(data, JSON.stringify(antes), JSON.stringify(depois), JUSTIFICATIVA_RESTAURACAO, agora);
     }
   }
   if (backup.configuracoes) {
@@ -329,9 +329,9 @@ app.put("/api/backup", (req, res) => {
     && (config.inicioSemana === "0" || config.inicioSemana === "1")
   );
 
-  if (!registrosValidos || !configValida || !justificativaValida(backup?.justificativa) ||
+  if (!registrosValidos || !configValida ||
       !previstasValidas(backup?.jornadasPrevistas, registros)) {
-    return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
+    return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e jornadas previstas." });
   }
 
   restaurarBackup(backup);

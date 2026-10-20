@@ -10,8 +10,7 @@ module.exports = async function apiContract(t, request) {
   const justificativa = "Correção fictícia realizada no contrato HTTP.";
   const call = (route, method = 'GET', data, auth = session, csrf = true) => {
     const alterarDia = /^\/api\/registros\/\d{4}-/.test(route) && (method === 'PUT' || method === 'DELETE');
-    const importar = route === '/api/backup' && method === 'PUT';
-    const corpo = (alterarDia || importar) && data !== undefined
+    const corpo = alterarDia && data !== undefined
       ? { ...data, justificativa }
       : method === 'DELETE' && alterarDia ? { justificativa } : data;
     return request(route, {
@@ -137,6 +136,34 @@ module.exports = async function apiContract(t, request) {
     assert.equal((await call('/api/configuracoes')).status,200);
     assert.equal((await call('/api/backup','PUT',backup)).status,200);
     assert.equal((await (await call('/api/jornada/previstas')).json())['2026-09-21'].minutos,360);
+  });
+  await t.test('restauração sem justificativa mantém auditoria automática e correções protegidas', async () => {
+    const original = await (await call('/api/registros')).json();
+    const changed = { ...record, entrada: '07:30', extras: [{ horario: '20:00', descricao: 'Dado fictício' }] };
+    const dia = '2026-10-15';
+    const novoDia = '2026-08-10';
+    // Texto legado é aceito por compatibilidade, mas não pode forjar a auditoria.
+    assert.equal((await call('/api/backup', 'PUT', { registros: { [dia]: changed, [novoDia]: record }, justificativa: 'x' })).status, 200);
+    const audit = (await (await call('/api/jornada/historico/' + dia)).json()).alteracoes.at(-1);
+    assert.equal(audit.operacao, 'restauracao');
+    assert.equal(audit.justificativa, 'Restauração de backup confirmada pelo usuário.');
+    assert.deepEqual(audit.antes, original[dia]);
+    assert.deepEqual(audit.depois, changed);
+    assert.ok(Number.isFinite(Date.parse(audit.instante)));
+    const created = (await (await call('/api/jornada/historico/' + novoDia)).json()).alteracoes.at(-1);
+    assert.equal(created.antes, null);
+    assert.deepEqual(created.depois, record);
+    assert.equal((await call('/api/backup', 'PUT', { registros: original })).status, 200);
+    const removed = (await (await call('/api/jornada/historico/' + novoDia)).json()).alteracoes.at(-1);
+    assert.deepEqual(removed.antes, record);
+    assert.equal(removed.depois, null);
+    assert.equal(removed.justificativa, audit.justificativa);
+    for (const method of ['PUT', 'DELETE']) {
+      const response = await request('/api/registros/' + dia, { method,
+        headers: { Cookie: session.cookie, 'X-CSRF-Token': session.csrf, 'Content-Type': 'application/json' },
+        body: JSON.stringify(method === 'PUT' ? changed : {}) });
+      assert.equal(response.status, 400);
+    }
   });
   await t.test('exclusão de registro', async () => {
     assert.equal((await call('/api/registros/2026-10-15','DELETE')).status,204);
