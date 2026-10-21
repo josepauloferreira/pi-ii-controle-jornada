@@ -414,3 +414,48 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 600 
     }
   });
 }
+
+test('excluir jornada e registrar entrada novamente mantém auditoria e atualiza Minha Jornada', async ({ page }, info) => {
+  await login(page, 'jornada', nextPassword);
+  const date = await page.evaluate(async () => (await (await fetch('/api/jornada/ativa')).json()).data);
+  await fixture(page, date, { entrada:'08:00', saidaAlmoco:null, retornoAlmoco:null, saida:null, extras:[] });
+  // Somente o SQLite descartável do runner: avança o intervalo da marcação fictícia.
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const Database = require('../../backend/node_modules/better-sqlite3');
+  expect(process.env.E2E_DB_PATH).toContain('meu-ponto-e2e-');
+  const db = new Database(process.env.E2E_DB_PATH);
+  try {
+    const old = new Date(Date.now()-120000).toISOString();
+    db.prepare('UPDATE marcacoes_servidor SET instante=? WHERE data=?').run(old,date);
+    db.prepare("UPDATE registro_auditoria SET instante=? WHERE data=? AND operacao='marcacao'").run(old,date);
+  } finally { db.close(); }
+  const before = await page.evaluate(async date => (await (await fetch('/api/jornada/historico/'+date)).json()),date);
+  expect(before.eventos.length).toBeGreaterThan(0);
+  await page.reload();
+  await expect(page.locator('#viewTitle')).toHaveText('Minha Jornada');
+  await goto(page, 'historico');
+  await page.locator(`button[data-action="details"][data-date="${date}"]`).click();
+  await page.getByRole('button',{name:'Excluir registro',exact:true}).click();
+  await page.locator('#deleteReason').fill(reason);
+  await page.getByRole('button',{name:'Confirmar exclusão',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Detalhes da jornada'})).toContainText('Esta jornada foi excluída');
+  await page.keyboard.press('Escape');
+  await goto(page,'jornada');
+  await expect(page.locator('#entrada')).toHaveText('--:--');
+  await expect(page.locator('#btnBaterPonto')).toHaveText('Registrar entrada');
+  const saved = page.waitForResponse(response => response.url().endsWith('/api/jornada/marcar') && response.request().method()==='POST');
+  await page.locator('#btnBaterPonto').click();
+  const response = await saved;
+  expect(response.status()).toBe(201);
+  const data = await response.json();
+  await expect(page.locator('#entrada')).toHaveText(data.horario);
+  await expect(page.locator('#mensagem')).toContainText('Ponto registrado pelo servidor');
+  await page.reload();
+  await expect(page.locator('#entrada')).toHaveText(data.horario);
+  const after = await page.evaluate(async date => (await (await fetch('/api/jornada/historico/'+date)).json()),date);
+  expect(after.eventos).toEqual(before.eventos);
+  expect(after.alteracoes.at(-1).operacao).toBe('marcacao');
+  expect(after.alteracoes.at(-1).depois.entrada).toBe(data.horario);
+  await info.attach('entrada-apos-exclusao',{body:await page.screenshot(),contentType:'image/png'});
+});

@@ -205,7 +205,7 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
   const url = 'file:'+path.join(folder,'test.db');
   const clients = [createClient({url}),createClient({url})];
   let pauseInsert=false, reached, resume;
-  const wrapped = { batch:(...a)=>clients[1].batch(...a), execute:async statement=>{
+  const wrapped = { transaction:(...a)=>clients[1].transaction(...a), batch:(...a)=>clients[1].batch(...a), execute:async statement=>{
     if(pauseInsert && statement.sql?.startsWith('INSERT INTO sessoes_conta')) {
       pauseInsert=false; reached(); await new Promise(r=>{resume=r;});
     }
@@ -306,4 +306,17 @@ test('falha de inicialização retorna erro genérico e permite nova tentativa',
     fail=false;
     assert.equal((await fetch(`http://127.0.0.1:${server.address().port}/api/health`)).status,200);
   } finally {console.error=old;await new Promise(r=>server.close(r));}
+});
+
+test('libSQL: remarcação após exclusão preserva auditoria, intervalo e atomicidade',async t=>{
+  const folder=fs.mkdtempSync(path.join(os.tmpdir(),'punch-retry-libsql-'));
+  const client=createClient({url:'file:'+path.join(folder,'test.db')});
+  const server=createCloudApp({client}).listen(0,'127.0.0.1');
+  try {
+    await once(server,'listening');
+    await require('./punch-retry-contract.cjs')(t,{
+      request:(route,options)=>fetch(`http://127.0.0.1:${server.address().port}${route}`,options),
+      execute:statement=>client.execute(statement)
+    });
+  } finally {t.mock.timers.reset();await new Promise(r=>server.close(r));client.close();fs.rmSync(folder,{recursive:true,force:true});}
 });

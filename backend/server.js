@@ -92,8 +92,12 @@ const congelarPrevista = db.prepare(
   "SELECT ?, CAST(SUBSTR(jornada,1,2) AS INTEGER)*60 + CAST(SUBSTR(jornada,4,2) AS INTEGER), ?, ? " +
   "FROM configuracoes WHERE id=1"
 );
-const buscarEntradaOriginal = db.prepare(
-  "SELECT instante FROM marcacoes_servidor WHERE data = ? AND campo = 'entrada'"
+const buscarEntradaServidor = db.prepare(
+  "SELECT instante FROM (" +
+  "SELECT instante FROM registro_auditoria WHERE data=? AND operacao='marcacao' " +
+  "AND json_extract(antes,'$.entrada') IS NULL AND json_extract(depois,'$.entrada') IS NOT NULL " +
+  "UNION ALL SELECT instante FROM marcacoes_servidor WHERE data=? AND campo='entrada'" +
+  ") ORDER BY instante DESC LIMIT 1"
 );
 
 function diaDaJornada(agora = new Date()) {
@@ -101,7 +105,7 @@ function diaDaJornada(agora = new Date()) {
   const anterior = diaAnterior(hoje);
   const atual = buscarDia.get(hoje);
   const ontem = buscarDia.get(anterior);
-  const entrada = buscarEntradaOriginal.get(anterior);
+  const entrada = buscarEntradaServidor.get(anterior, anterior);
   return resolverDataJornada(agora, atual && converterRegistro(atual),
     ontem && converterRegistro(ontem), entrada?.instante);
 }
@@ -131,13 +135,16 @@ const registrarMarcacao = db.transaction(() => {
   if (campo === null) return { erro: "As quatro marcações da jornada já foram realizadas.", status: 409 };
 
   const ultimo = db.prepare(
-    "SELECT instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante DESC LIMIT 1"
-  ).get(data);
-  if (ultimo && Date.parse(instante) - Date.parse(ultimo.instante) < 60_000) {
+    "SELECT MAX(instante) AS instante FROM (" +
+    "SELECT instante FROM registro_auditoria WHERE data=? AND operacao='marcacao' " +
+    "UNION ALL SELECT instante FROM marcacoes_servidor WHERE data=?)"
+  ).get(data, data);
+  if (ultimo?.instante && Date.parse(instante) - Date.parse(ultimo.instante) < 60_000) {
     return { erro: "Aguarde pelo menos um minuto entre marcações.", status: 409 };
   }
 
-  db.prepare("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)")
+  // A primeira evidência permanece intacta; repetições após exclusão são auditadas abaixo.
+  db.prepare("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?) ON CONFLICT(data,campo) DO NOTHING")
     .run(data, campo, horario, instante);
   const atualizado = { ...antigo, [campo]: horario };
   salvarDia.run(data, atualizado.entrada, atualizado.saidaAlmoco,
@@ -158,7 +165,7 @@ app.post("/api/jornada/marcar", (req, res) => {
     if (resultado.status) return res.status(resultado.status).json({ erro: resultado.erro });
     return res.status(201).json(resultado);
   } catch (erro) {
-    if (erro.code?.startsWith("SQLITE_CONSTRAINT")) {
+    if (erro.code === "SQLITE_CONSTRAINT_PRIMARYKEY" && /marcacoes_servidor/.test(erro.message)) {
       return res.status(409).json({ erro: "Marcação já registrada. Atualize a página." });
     }
     throw erro;
