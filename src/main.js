@@ -54,7 +54,7 @@ function render(focus = false, routeChange = false) {
     document.title = path === 'acesso' ? `${state.registrationAvailable ? 'Primeiro acesso' : 'Entrar'} — Meu Ponto` : 'Meu Ponto — Seu tempo, bem registrado';
   }
   renderedRoute = state.user ? path : null;
-  // Somente hash navigation entre seções: dados, acesso e a mesma rota não animam.
+  // Somente navegação por hash entre seções: dados, acesso e a mesma rota não animam.
   if (sectionChange && renderedRoute) {
     screen.querySelector('.app-main')?.classList.add('route-enter');
   }

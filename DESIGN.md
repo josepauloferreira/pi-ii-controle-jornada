@@ -153,11 +153,11 @@ Curvas discretas na escala do frontmatter: botões e campos usam md; cards, lg; 
 
 ### Buttons
 
-Ação principal azul com texto branco; secundária branca com texto azul e contorno de controle; ação textual com fundo e borda transparentes. Exclusão dentro da confirmação usa vermelho sólido; ações de abrir exclusão usam texto e contorno vermelhos. Ícones têm alvo de 44px e nome acessível. Hover e pressionado mudam a cor sem deslocar o controle; a transição de borda dura 160ms e é imediata com `prefers-reduced-motion`.
+Ação principal azul com texto branco; secundária branca com texto azul e contorno de controle; ação textual com fundo e borda transparentes. Exclusão dentro da confirmação usa vermelho sólido; ações de abrir exclusão usam texto e contorno vermelhos. Ícones têm alvo de 44px e nome acessível. Hover e pressionado mudam a cor sem deslocar o controle; as transições de cor e borda duram 120ms e é imediata com `prefers-reduced-motion`.
 
 ### Inputs / Fields
 
-Fundo branco, texto principal e fonte de corpo, borda de controle, caret azul, placeholder legível e label associado. Foco visível externo de 3px, afastado 3px. Erros mantêm texto, alerta e possibilidade de nova tentativa. Botões de exibir senha têm nome e estado acessíveis. Horários aceitam normalização de quatro dígitos para `HH:mm` e validação real.
+Fundo branco, texto principal e fonte de corpo, borda de controle, caret azul, placeholder legível e label associado. Foco visível externo de 3px, afastado 3px. Erros mantêm texto, alerta e possibilidade de nova tentativa. Rótulos permanecem acima dos campos, com exemplo de usuário válido. Botões de exibir senha têm nome e estado acessíveis e preservam valor/seleção. Criação e troca explicam o mínimo de 12 caracteres; login não impõe esse mínimo. Novas senhas recebem aviso não bloqueador acima de 256 bytes UTF-8; o servidor valida o limite. Erros locais são associados ao campo por `aria-describedby` e `aria-invalid`, com foco no primeiro erro. Horários aceitam normalização de quatro dígitos para `HH:mm` e validação real.
 
 ### Cards / Containers
 
@@ -165,7 +165,7 @@ Cards agrupam status, métricas, marcações, histórico e configurações. Mét
 
 ### Navigation
 
-Sidebar desktop e barra inferior mobile expõem os mesmos quatro destinos. A página atual usa fundo azul suave, texto azul e `aria-current="page"`. A troca de view atualiza título do documento e foco no título da tela. Skip link permite chegar ao conteúdo.
+Sidebar desktop e barra inferior mobile expõem os mesmos quatro destinos. A página atual usa fundo azul suave, texto azul e `aria-current="page"`. A troca de view atualiza título do documento e foco no título da tela. Skip link permite chegar ao conteúdo. Apenas mudanças entre as quatro rotas autenticadas ativam uma entrada CSS de opacidade de 90% a 100% em 180ms; o shell permanece estável. Renders de dados, relógio, filtros, autenticação e a mesma rota não ativam essa entrada. Movimento reduzido mantém a troca instantânea, sem animação. Não há snapshots de página nem dependência da View Transitions API.
 
 ### Diálogos, detalhes e auditoria
 
