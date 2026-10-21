@@ -302,7 +302,11 @@ function createCloudApp({ client: suppliedClient, now: clock } = {}) {
     const [atual, anterior, entrada] = await Promise.all([
       db.execute(sql("SELECT * FROM registros WHERE data = ?", [hoje])),
       db.execute(sql("SELECT * FROM registros WHERE data = ?", [ontem])),
-      db.execute(sql("SELECT instante FROM marcacoes_servidor WHERE data = ? AND campo='entrada'", [ontem]))
+      db.execute(sql("SELECT instante FROM (" +
+        "SELECT instante FROM registro_auditoria WHERE data=? AND operacao='marcacao' " +
+        "AND json_extract(antes,'$.entrada') IS NULL AND json_extract(depois,'$.entrada') IS NOT NULL " +
+        "UNION ALL SELECT instante FROM marcacoes_servidor WHERE data=? AND campo='entrada'" +
+        ") ORDER BY instante DESC LIMIT 1", [ontem, ontem]))
     ]);
     return resolverDataJornada(agora,
       atual.rows[0] ? recordRow(atual.rows[0]) : null,
@@ -324,45 +328,51 @@ function createCloudApp({ client: suppliedClient, now: clock } = {}) {
     res.json(previstas);
   });
 
-  app.post("/api/jornada/marcar", async (req, res) => {
-    if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
-      return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
-    }
-    const agora = now();
-    const { horario, instante } = horarioDoServidor(agora);
-    const db = req.cloudDb;
-    const data = await diaDaJornada(db, agora);
-    const anterior = (await db.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
-    const antigo = anterior ? recordRow(anterior) : registroVazio();
-    const campo = proximoCampo(antigo);
-    if (campo === undefined) return res.status(409).json({ erro: "Jornada anterior inconsistente. Utilize correção justificada." });
-    if (campo === null) return res.status(409).json({ erro: "As quatro marcações da jornada já foram realizadas." });
-
-    const ultima = (await db.execute(sql(
-      "SELECT instante FROM marcacoes_servidor WHERE data = ? ORDER BY instante DESC LIMIT 1", [data]
-    ))).rows[0];
-    if (ultima && Date.parse(instante) - Date.parse(ultima.instante) < 60_000) {
-      return res.status(409).json({ erro: "Aguarde pelo menos um minuto entre marcações." });
-    }
-    const novo = { ...antigo, [campo]: horario };
+  async function registrarMarcacao(db, agora) {
+    // A leitura e a projeção precisam do mesmo lock, inclusive após exclusões.
+    const tx = await db.transaction("write");
     try {
-      await db.batch([
-        sql("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?)",
+      const { horario, instante } = horarioDoServidor(agora);
+      const data = await diaDaJornada(tx, agora);
+      const anterior = (await tx.execute(sql("SELECT * FROM registros WHERE data = ?", [data]))).rows[0];
+      const antigo = anterior ? recordRow(anterior) : registroVazio();
+      const campo = proximoCampo(antigo);
+      if (campo === undefined) return { status: 409, erro: "Jornada anterior inconsistente. Utilize correção justificada." };
+      if (campo === null) return { status: 409, erro: "As quatro marcações da jornada já foram realizadas." };
+      const ultima = (await tx.execute(sql(
+        "SELECT MAX(instante) AS instante FROM (" +
+        "SELECT instante FROM registro_auditoria WHERE data=? AND operacao='marcacao' " +
+        "UNION ALL SELECT instante FROM marcacoes_servidor WHERE data=?)", [data, data]
+      ))).rows[0];
+      if (ultima?.instante && Date.parse(instante) - Date.parse(ultima.instante) < 60_000) {
+        return { status: 409, erro: "Aguarde pelo menos um minuto entre marcações." };
+      }
+      const novo = { ...antigo, [campo]: horario };
+      await tx.batch([
+        // Preservar a primeira evidência; cada nova marcação também entra na auditoria.
+        sql("INSERT INTO marcacoes_servidor (data, campo, horario, instante) VALUES (?, ?, ?, ?) ON CONFLICT(data,campo) DO NOTHING",
           [data, campo, horario, instante]),
         saveDay(data, novo),
         congelarPrevista(data, "registrada", instante),
         sql("INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'marcacao', ?, ?, ?, ?)",
           [data, JSON.stringify(antigo), JSON.stringify(novo), "Marcação automática pelo servidor", instante])
-      ], "write");
-    } catch (error) {
-      if (/UNIQUE constraint failed|SQLITE_CONSTRAINT/i.test(String(error.message))) {
-        return res.status(409).json({ erro: "Marcação já registrada. Atualize a página." });
-      }
-      throw error;
+      ]);
+      const prevista = (await tx.execute(sql("SELECT minutos, origem FROM jornada_prevista_dia WHERE data=?", [data]))).rows[0];
+      await tx.commit();
+      return { data, campo, horario, instante, registro: novo,
+        jornadaPrevista: { minutos: Number(prevista.minutos), origem: prevista.origem } };
+    } finally {
+      try { if (!tx.closed) await tx.rollback(); }
+      finally { tx.close(); }
     }
-    const prevista = (await db.execute(sql("SELECT minutos, origem FROM jornada_prevista_dia WHERE data=?", [data]))).rows[0];
-    res.status(201).json({ data, campo, horario, instante, registro: novo,
-      jornadaPrevista: { minutos: Number(prevista.minutos), origem: prevista.origem } });
+  }
+  app.post("/api/jornada/marcar", async (req, res) => {
+    if (req.body && (typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length)) {
+      return res.status(400).json({ erro: "Esta operação não aceita horários enviados pelo cliente." });
+    }
+    const resultado = await registrarMarcacao(req.cloudDb, now());
+    if (resultado.status) return res.status(resultado.status).json({ erro: resultado.erro });
+    res.status(201).json(resultado);
   });
 
   app.get("/api/jornada/historico/:data", async (req, res) => {
