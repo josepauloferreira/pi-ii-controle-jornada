@@ -51,5 +51,8 @@ export function reasonField(id, label = 'Justificativa') {
   return `<div class="field"><label for="${id}">${label} <span class="muted">(obrigatória)</span></label><textarea id="${id}" name="justificativa" rows="3" minlength="10" maxlength="500" required aria-describedby="${id}Help" placeholder="Descreva o motivo da alteração."></textarea><span class="field-help" id="${id}Help">De 10 a 500 caracteres. A alteração ficará no histórico.</span></div>`;
 }
 export function passwordField(id, label, autocomplete, minLength = 1) {
-  return `<div class="field"><label for="${id}">${label}</label><div class="password-field"><input id="${id}" name="${id}" type="password" required minlength="${minLength}" maxlength="256" autocomplete="${autocomplete}" aria-describedby="${id}Help"><button type="button" class="btn icon-button" data-password="${id}" aria-label="Mostrar ${label.toLowerCase()}" aria-pressed="false">${icon('eye')}</button></div><span class="field-help" id="${id}Help">${minLength === 12 ? 'Mínimo de 12 caracteres; máximo de 256 bytes.' : ''}</span></div>`;
+  const creating = minLength === 12;
+  const help = id === 'authConfirmarSenha' ? 'Digite a mesma senha novamente.' : creating
+    ? 'Use pelo menos 12 caracteres. Prefira uma frase longa e exclusiva.' : '';
+  return `<div class="field"><label for="${id}">${label}</label><div class="password-field"><input id="${id}" name="${id}" type="password" required ${creating ? `minlength="12" data-new-password` : ''} autocomplete="${autocomplete}"${help ? ` aria-describedby="${id}Help"` : ''}><button type="button" class="btn icon-button" data-password="${id}" aria-label="Mostrar ${label.toLowerCase()}" aria-pressed="false">${icon('eye')}</button></div>${help ? `<span class="field-help" id="${id}Help">${help}</span>` : ''}${creating ? `<span class="field-help" id="${id}Limit" hidden>Esta senha ultrapassa o limite de 256 bytes. Use uma frase mais curta.</span>` : ''}</div>`;
 }

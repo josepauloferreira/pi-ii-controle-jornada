@@ -8,6 +8,7 @@ import { landing, authentication } from './views/public.js';
 import { planned, icon } from './ui/components.js';
 import { openDialog, closeDialogs, cancelButton } from './ui/dialog.js';
 import { createJourneyDialogs } from './ui/journey-dialogs.js';
+import { validateForm, fieldError, clearFieldError, passwordFeedback, togglePassword } from './ui/forms.js';
 
 const routes = ['visao-geral', 'jornada', 'historico', 'configuracoes'];
 const defaults = () => ({ nome: '', jornada: '08:00', inicioSemana: '1' });
@@ -20,6 +21,7 @@ const state = {
 const screen = document.querySelector('#screen');
 let generation = 0;
 let messageTimer;
+let renderedRoute = null;
 const dialogs = createJourneyDialogs({ getState: () => state, refresh: () => loadData({ silent: true }), notify,
   afterPassword: () => expire('Senha atualizada. Entre novamente com sua nova senha.')
 });
@@ -27,11 +29,14 @@ const dialogs = createJourneyDialogs({ getState: () => state, refresh: () => loa
 function route() { return location.hash.replace(/^#\/?/, '').split('?')[0]; }
 function navigate(path, replace = false) {
   if (replace) { history.replaceState(null, '', '#/' + path); render(true); }
-  else if (route() === path) render(true);
+  else if (route() === path) return;
   else location.hash = '/' + path;
 }
-function render(focus = false) {
+function render(focus = false, routeChange = false) {
   let path = route();
+  const activeId = screen.contains(document.activeElement) ? document.activeElement.id : null;
+  const previousRoute = renderedRoute;
+  const sectionChange = routeChange && routes.includes(path) && previousRoute && previousRoute !== path;
   if (state.user) {
     if (!routes.includes(path)) {
       path = state.nextRoute;
@@ -48,12 +53,17 @@ function render(focus = false) {
     screen.innerHTML = path === 'acesso' ? authentication(state) : landing(state);
     document.title = path === 'acesso' ? `${state.registrationAvailable ? 'Primeiro acesso' : 'Entrar'} — Meu Ponto` : 'Meu Ponto — Seu tempo, bem registrado';
   }
+  renderedRoute = state.user ? path : null;
+  // Somente hash navigation entre seções: dados, acesso e a mesma rota não animam.
+  if (sectionChange && renderedRoute) {
+    screen.querySelector('.app-main')?.classList.add('route-enter');
+  }
   bindTimeInputs(screen);
   updateClock();
   if (focus) {
     screen.querySelector('#viewTitle, #authTitle, #landingTitle')?.focus({ preventScroll: true });
     window.scrollTo({ top: 0, behavior: 'instant' });
-  }
+  } else if (activeId) document.getElementById(activeId)?.focus({ preventScroll: true });
 }
 function notify(message, auditDate) {
   const toast = document.querySelector('#mensagem');
@@ -121,15 +131,17 @@ async function activateSession(data) {
 }
 async function authenticate(form) {
   const submit = form.querySelector('#authSubmit');
+  if (submit.disabled) return;
   const error = form.querySelector('#authError');
   const setup = state.registrationAvailable;
   const usuario = form.querySelector('#authUsuario').value.trim().toLowerCase();
   const senha = form.querySelector('#authSenha').value;
   const confirmarSenha = form.querySelector('#authConfirmarSenha')?.value;
   error.textContent = '';
+  if (!validateForm(form)) return;
   if (setup && senha !== confirmarSenha) {
     error.textContent = 'As senhas não coincidem. Confira a confirmação.';
-    form.querySelector('#authConfirmarSenha').setAttribute('aria-invalid', 'true');
+    fieldError(form.querySelector('#authConfirmarSenha'), error.textContent);
     form.querySelector('#authConfirmarSenha').focus();
     return;
   }
@@ -223,10 +235,12 @@ async function punch() {
 async function saveSettings(form) {
   const current = generation;
   const btn = form.querySelector('#saveSettings');
+  if (btn.disabled) return;
   const error = form.querySelector('#configError');
   const original = btn.innerHTML;
   error.textContent = '';
   btn.disabled = true;
+  btn.setAttribute('aria-busy', 'true');
   btn.textContent = 'Salvando…';
   const data = { nome: form.querySelector('#nomeFuncionario').value.trim(), jornada: form.querySelector('#jornadaDiaria').value, inicioSemana: form.querySelector('#inicioSemana').value };
   try {
@@ -245,6 +259,7 @@ async function saveSettings(form) {
     error.focus();
   } finally {
     btn.disabled = false;
+    btn.removeAttribute('aria-busy');
     btn.innerHTML = original;
   }
 }
@@ -319,11 +334,7 @@ function updateClock() {
 document.addEventListener('click', event => {
   const toggle = event.target.closest('[data-password]');
   if (toggle) {
-    const input = document.getElementById(toggle.dataset.password);
-    const show = input.type === 'password';
-    input.type = show ? 'text' : 'password';
-    toggle.setAttribute('aria-pressed', String(show));
-    toggle.setAttribute('aria-label', `${show ? 'Ocultar' : 'Mostrar'} ${document.querySelector(`label[for="${input.id}"]`).textContent.toLowerCase()}`);
+    togglePassword(toggle);
     return;
   }
   const target = event.target.closest('[data-action]');
@@ -356,10 +367,15 @@ document.addEventListener('change', event => {
   if (event.target.id === 'mesFiltro') { state.month = event.target.value; document.querySelector('#historyContent').innerHTML = historyContent(state); }
   if (event.target.id === 'arquivoJSON') void chooseBackup(event.target);
 });
-document.addEventListener('input', event => { if (event.target.hasAttribute('aria-invalid')) event.target.removeAttribute('aria-invalid'); });
+document.addEventListener('input', event => {
+  clearFieldError(event.target);
+  passwordFeedback(event.target);
+  if (event.target.id === 'authSenha') clearFieldError(document.getElementById('authConfirmarSenha'));
+  if (event.target.closest('#authForm')) document.getElementById('authError').textContent = '';
+});
 window.addEventListener('hashchange', () => {
   if (['como-funciona', 'main-content'].includes(route())) return;
-  render(true);
+  render(true, true);
 });
 let lastDay = today();
 window.setInterval(() => {

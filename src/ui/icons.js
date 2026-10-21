@@ -18,6 +18,7 @@ const paths = {
   logout: '<path d="M9 4H4v16h5m5-12 4 4-4 4M8 12h12"/>',
   info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/>',
   eye: '<path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff: '<path d="m3 3 18 18M10.6 5.1 12 5c7 0 10 7 10 7a17 17 0 0 1-3 4M6.3 6.3A19 19 0 0 0 2 12s3 7 10 7a12 12 0 0 0 5.7-1.7M10 10a2.8 2.8 0 0 0 4 4"/>',
   user: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2Z"/>',
   balance: '<path d="M12 3v18m-6 0h12M4 6h16M6 6l-4 8h8L6 6Zm12 0-4 8h8l-4-8Z"/>',
   home: '<path d="m3 10 9-7 9 7M5 9v12h14V9m-10 12v-7h6v7"/>'

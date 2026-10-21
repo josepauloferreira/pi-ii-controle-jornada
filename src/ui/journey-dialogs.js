@@ -3,6 +3,7 @@ import { escape, fields, labels, dateLabel, timestampLabel, emptyRecord } from '
 import { metrics, timeline, button, icon, timeField, reasonField, passwordField, badge } from './components.js';
 import { openDialog, cancelButton } from './dialog.js';
 import { disableMigrationOffer } from '../lib/legacy.js';
+import { validateForm, fieldError } from './forms.js';
 
 export function createJourneyDialogs({ getState, refresh, notify, afterPassword }) {
   let detail = null;
@@ -167,11 +168,12 @@ export function createJourneyDialogs({ getState, refresh, notify, afterPassword 
   }
   function openPassword() {
     const dialog = openDialog({ id: 'senhaModal', title: 'Alterar senha', description: 'Ao salvar, as sessões serão encerradas. Entre novamente com a nova senha.',
-      body: `<form id="senhaForm">${passwordField('senhaAtual', 'Senha atual', 'current-password')}${passwordField('senhaNova', 'Nova senha', 'new-password', 12)}<p class="form-error" id="senhaError" role="alert"></p></form>`,
+      body: `<form id="senhaForm" novalidate><input type="text" name="username" autocomplete="username" value="${escape(getState().user)}" hidden>${passwordField('senhaAtual', 'Senha atual', 'current-password')}${passwordField('senhaNova', 'Nova senha', 'new-password', 12)}</form>`,
       footer: cancelButton + submit('Salvar nova senha', 'senhaForm'), initialFocus: '#senhaAtual'
     });
     dialog.query('form').addEventListener('submit', async event => {
       event.preventDefault();
+      if (dialog.element.getAttribute('aria-busy') === 'true' || !validateForm(event.target)) return;
       dialog.setBusy(true);
       try {
         await request('/api/auth/password', { method: 'POST', data: { senhaAtual: dialog.query('#senhaAtual').value, novaSenha: dialog.query('#senhaNova').value } });
@@ -180,7 +182,14 @@ export function createJourneyDialogs({ getState, refresh, notify, afterPassword 
         afterPassword();
       } catch (error) {
         dialog.setBusy(false);
-        if (dialog.element.isConnected) dialog.error(error.message);
+        if (dialog.element.isConnected) {
+          const field = error.message === 'Senha atual incorreta.' ? '#senhaAtual'
+            : error.message === 'A nova senha deve ser diferente da anterior.' ? '#senhaNova' : null;
+          if (field) {
+            fieldError(dialog.query(field), error.message);
+            dialog.query(field).focus();
+          } else dialog.error(error.message);
+        }
       }
     });
   }
