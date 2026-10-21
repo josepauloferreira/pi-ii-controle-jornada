@@ -2,6 +2,10 @@
 
 Este documento explica como reproduzir as verificações do Meu Ponto e os limites das evidências. Resultados locais registrados em **20/10/2026**, com **Node.js 24.22.0 e npm 11.19.1**. As contagens não representam percentual de cobertura; o estado remoto do commit deve ser consultado no GitHub Actions.
 
+## Correção de remarcação após exclusão
+
+A suíte atual acrescenta o fluxo de excluir jornada e registrar nova entrada: **58 cloud, 33 SQLite e 31 E2E**, mantendo 15 unitários. Há ainda 8 casos opcionais com driver HTTP libSQL real contra daemon local descartável. Reprodução, comportamento e limites em [VALIDACAO-REMARCACAO.md](VALIDACAO-REMARCACAO.md). Os números Motion v3 abaixo registram a rodada anterior.
+
 ## Atualização Motion v3 — 21/10/2026
 
 A suíte atual contém **30 E2E**: os 18 fluxos funcionais abaixo, 10 cenários de navegação/formulários isolados por interceptação e 2 gravações com API local real (1440px e 320px). Foram mantidos **15 unitários, 50 cloud/libSQL e 25 SQLite**. A CI armazena vídeos, capturas e traces no artefato `meu-ponto-e2e-evidencias` por 14 dias. Consulte [VALIDACAO-MOTION.md](VALIDACAO-MOTION.md) para decisões, resultados, revisão visual Chromium/Firefox e limites. As seções de 20/10/2026 abaixo permanecem como registro da rodada anterior.
