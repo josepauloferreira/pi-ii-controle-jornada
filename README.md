@@ -12,14 +12,29 @@ Uma aplicação web de **acompanhamento individual da jornada em home office**. 
 
 ## Funcionalidades
 
-- **Registro de ponto:** entrada, saída para almoço, retorno e saída do expediente.
-- **Acompanhamento diário:** horas trabalhadas, jornada prevista e saldo; expedientes incompletos aparecem como “Em andamento”.
-- **Histórico mensal:** consulta, edição e exclusão de registros, incluindo batidas extras com descrição.
+- **Registro de ponto:** entrada, pausa, retorno e saída, em sequência, com horário e data definidos pelo servidor. A jornada ativa pode ter começado no dia anterior.
+- **Acompanhamento diário:** horas trabalhadas, jornada prevista congelada por dia e saldo; expedientes incompletos aparecem como “Em andamento”. Alterar a jornada das configurações preserva as cargas anteriores.
+- **Histórico mensal e auditoria:** consulta, correção e exclusão justificadas (10–500 caracteres), incluindo batidas extras com descrição opcional. A auditoria continua consultável por data após excluir uma jornada. Extras não alteram automaticamente as horas trabalhadas.
 - **Configurações pessoais:** nome de exibição, jornada diária e início da semana.
-- **Exportação e backup:** histórico em CSV, backup JSON e restauração transacional mediante confirmação.
+- **Exportação e backup:** histórico em CSV, backup JSON e restauração transacional mediante confirmação, com auditoria automática e sem justificativa digitada.
 - **Acesso pessoal:** cadastro inicial de uma conta, login, logout e troca de senha com invalidação das sessões anteriores.
 
 Todos os horários usam **24 horas**, no formato `HH:mm`. Por exemplo, `08:30` e `18:30`; ao digitar `1830`, o campo converte para `18:30`. Valores fora de `00:00` a `23:59` são rejeitados.
+
+## Interface e navegação
+
+A interface aplica o design system [Apple Light](DESIGN.md), com fonte do sistema, azul de interação, superfícies claras e composição responsiva. O frontend usa módulos ES para separar views, componentes, diálogos e acesso aos dados.
+
+| Endereço | Fluxo |
+| --- | --- |
+| `/#/` | Apresentação pública com prévia identificada como ilustrativa. |
+| `/#/acesso` | Login ou cadastro inicial, conforme a disponibilidade informada pela API. |
+| `/#/visao-geral` | Estado da jornada, métricas, etapas e jornadas anteriores. |
+| `/#/jornada` | Próxima marcação, horários, extras, correções e auditoria. |
+| `/#/historico` | Filtro mensal, CSV, detalhes e consulta da auditoria por data. |
+| `/#/configuracoes` | Jornada, preferências, senha, backup e migração local. |
+
+As quatro views privadas exigem sessão. A navegação usa sidebar no desktop e barra inferior no mobile. Diálogos nativos mantêm o fundo inerte, contêm o foco de teclado, aceitam Escape quando disponíveis e retornam o foco ao fechar; cabeçalho e ações permanecem visíveis enquanto o corpo rola. Carregamento, falha e nova tentativa têm estados próprios; expirar a sessão fecha os diálogos e remove os dados privados da interface.
 
 ## Arquitetura e ambientes
 
@@ -114,10 +129,12 @@ Na nuvem, registros, configurações, conta, sessões e limites de login ficam n
 | Ação | Resultado |
 | --- | --- |
 | **Exportar CSV** | Baixa o histórico do mês selecionado para consulta em planilha. |
-| **Fazer backup** | Baixa JSON com registros e configurações do ambiente atual. |
-| **Restaurar backup** | Substitui todos os registros do destino e as configurações presentes no arquivo, após confirmação. |
+| **Fazer backup** | Baixa JSON v2 com registros, configurações e jornadas previstas dos dias presentes no arquivo. |
+| **Restaurar backup** | Aceita backups legados/v1 e v2, substitui os registros e atualiza as configurações presentes, após revisar o arquivo e confirmar a substituição. |
 
-Backups JSON **não incluem senhas nem sessões**. A restauração valida o conteúdo antes da escrita e aplica as alterações em transação; uma falha causa rollback. Faça um backup atual antes de restaurar e confira o ambiente de destino. O CSV não é um formato de restauração.
+Backups JSON **não incluem senhas, sessões nem o histórico de auditoria**. A exportação omite snapshots de jornada prevista sem registro correspondente. A restauração aceita `registros`, `configuracoes` e `jornadasPrevistas`, sendo os dois últimos opcionais; valida o conteúdo antes da escrita e aplica as alterações em transação. Uma falha causa rollback. Quando o arquivo fornece um snapshot em `jornadasPrevistas[data]`, sua carga substitui a armazenada no destino. Sem snapshot para a data, a carga existente é preservada; dias novos usam a configuração presente no backup ou, na ausência dela, a do destino. As cargas restauradas explicitamente continuam identificadas como importadas.
+
+Restaurar não exige justificativa manual. SQLite e libSQL gravam automaticamente “Restauração de backup confirmada pelo usuário.” em cada jornada cujo registro foi criado, alterado ou removido, preservando valores anteriores e posteriores. Se apenas a carga prevista mudar, o evento automático também registra os minutos anteriores e restaurados. Faça um backup atual antes de restaurar e confira o ambiente de destino. O CSV não é um formato de restauração.
 
 ### Dados do protótipo antigo
 
@@ -127,14 +144,14 @@ O cadastro de uma conta não apaga registros de jornada já existentes. A transf
 
 ## Testes e qualidade
 
-A aplicação tem testes de **integração HTTP** para SQLite e libSQL, **testes unitários dos cálculos de jornada** e uma suíte de **navegação E2E com Playwright**, sem utilizar Turso ou dados reais.
+A aplicação tem testes de **integração HTTP** para SQLite e libSQL, **testes unitários de jornada e validação de backup** e uma suíte de **navegação E2E com Playwright**, sem utilizar Turso ou dados reais.
 
 Depois de instalar as dependências, execute:
 
 ```bash
 npm --prefix backend test   # Express + SQLite
 npm run test:cloud          # Express + libSQL e entrypoint serverless
-npm run test:unit           # Cálculos e validação de jornada
+npm run test:unit           # Jornada e validação de backup
 npm run build               # Build Vite
 ```
 
@@ -148,17 +165,17 @@ npm run test:e2e
 
 | Camada | Verificação | Resultado registrado |
 | --- | --- | --- |
-| SQLite local | Testes de integração e contrato HTTP | **17 aprovados**, 0 falhas |
-| libSQL / Vercel Function | Testes de integração, concorrência e contrato HTTP | **41 aprovados**, 0 falhas |
-| Regras do frontend | `node:test` sobre `src/jornada.js` | **12 testes unitários aprovados** |
-| Interface local | Playwright + Chromium + SQLite temporário | **3 cenários E2E aprovados** |
+| SQLite local | Integração HTTP e regras de jornada | **25 aprovados**, 0 falhas |
+| libSQL / Vercel Function | Testes de integração, concorrência e contrato HTTP | **50 aprovados**, 0 falhas |
+| Regras do frontend | `node:test` sobre jornada e backup | **15 testes unitários aprovados** |
+| Interface local | Playwright + Chromium + SQLite temporário | **18 cenários E2E aprovados** |
 | Frontend | `npm run build` | Build aprovado |
 | Preview hospedado | HTTP e navegador, registrado em relatório anterior | **14 cenários históricos** |
 | Produção | Smoke tests de disponibilidade e acesso | Evidências documentadas separadamente |
 
-Os números correspondem a resultados registrados em 17/10/2026, não a percentuais de cobertura. **Os 3 testes E2E reproduzíveis são diferentes dos 14 cenários históricos hospedados na Vercel.** O Playwright inicia Vite e Express locais usando um arquivo SQLite descartável, sem credenciais externas.
+Os resultados locais foram registrados em **20/10/2026**, com **Node.js 24.22.0 e npm 11.19.1**, sem falhas; não são percentuais de cobertura. Os 18 cenários E2E incluem navegação, erros e recuperação, auditoria, backup, migração, expiração de sessão, troca de senha e cinco larguras. São distintos dos 14 cenários históricos hospedados na Vercel. Playwright utiliza SQLite descartável; a integração libSQL também usa arquivos locais temporários, sem conexão com Turso remoto.
 
-A [CI do GitHub Actions](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml) valida integração, testes unitários e build em **Node.js 22 e 24**, além de executar os E2E em um job Chromium separado. A [primeira execução com Playwright passou](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39053909867).
+A [CI do GitHub Actions](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/workflows/ci.yml) está configurada para integração, unitários e build em **Node.js 22 e 24**, com E2E em job Chromium separado. A execução remota desta entrega ainda deve ser conferida no PR; a [primeira execução com Playwright](https://github.com/josepauloferreira/pi-ii-controle-jornada/actions/runs/39053909867) é uma evidência histórica.
 
 **[Estratégia e cobertura detalhadas](TESTES.md)** · [Como executar Playwright](e2e/README.md) · [Evidências do Preview](VALIDACAO-PREVIEW.md) · [Evidências da produção](VALIDACAO-PRODUCAO.md)
 
@@ -184,11 +201,15 @@ Deployments de branches geram previews. O deploy automático da `main` está des
 
 ```text
 .
-├── index.html                 # Interface da aplicação
+├── index.html                 # Entrada HTML da aplicação
 ├── src/
-│   ├── main.js                # Interações, autenticação e chamadas à API
+│   ├── main.js                # Estado, rotas hash, autenticação e ações
+│   ├── views/                 # Landing, acesso e quatro views privadas
+│   ├── ui/                    # Componentes, SVGs e diálogos
+│   ├── lib/                   # API, formatação, backup e migração local
 │   ├── jornada.js             # Cálculos puros de jornada e saldo
-│   └── style.css              # Estilos e responsividade
+│   ├── styles/tokens.css      # Tokens do sistema Apple Light
+│   └── style.css              # Componentes e responsividade
 ├── api/index.js               # Entrada da Vercel Function
 ├── backend/
 │   ├── server.js              # API Express local
@@ -197,11 +218,12 @@ Deployments de branches geram previews. O deploy automático da `main` está des
 │   ├── cloud.cjs              # API Express com Turso libSQL
 │   ├── api-contract.cjs       # Contrato HTTP compartilhado pelos testes
 │   └── *.test.*               # Testes de integração
-├── tests/jornada.test.js      # Testes unitários em node:test
+├── tests/                     # Unitários de jornada e validação de backup
 ├── e2e/                       # Playwright com banco SQLite descartável
 ├── vite.config.js             # Configuração e proxy de desenvolvimento
 ├── vercel.json                # Build, região e roteamento de nuvem
 ├── .github/workflows/ci.yml  # CI em Node.js 22 e 24
+├── DESIGN.md                  # Sistema visual e regras dos componentes
 ├── TESTES.md                  # Estratégia e matriz de testes
 ├── DEPLOY-VERCEL.md           # Instalação, ambientes e publicação
 ├── VALIDACAO-PREVIEW.md       # Evidências da validação executada
@@ -222,12 +244,17 @@ Todas as rotas usam o prefixo `/api`. Dados de jornada exigem sessão autenticad
 | `POST` | `/api/auth/logout` | Encerrar sessão. |
 | `POST` | `/api/auth/password` | Alterar senha e invalidar sessões. |
 | `GET` | `/api/registros` | Listar registros; aceita `?mes=AAAA-MM`. |
-| `GET`, `PUT`, `DELETE` | `/api/registros/:data` | Consultar, salvar ou excluir um dia em `AAAA-MM-DD`. |
+| `GET`, `PUT`, `DELETE` | `/api/registros/:data` | Consultar, corrigir ou excluir um dia em `AAAA-MM-DD`; escritas exigem justificativa de 10–500 caracteres. |
+| `GET` | `/api/jornada/ativa` | Obter a data e o registro da jornada ativa definida pelo servidor. |
+| `POST` | `/api/jornada/marcar` | Registrar a próxima etapa com horário do servidor; recebe `{}`, sem horário fornecido pelo cliente. |
+| `GET` | `/api/jornada/previstas` | Consultar a carga prevista congelada de cada jornada. |
+| `GET` | `/api/jornada/historico/:data` | Consultar origem e alterações auditadas, inclusive após excluir o registro. |
 | `GET`, `PUT` | `/api/configuracoes` | Consultar ou atualizar configurações. |
-| `PUT` | `/api/backup` | Restaurar registros e configurações. |
+| `PUT` | `/api/backup` | Restaurar registros e, opcionalmente, configurações e jornadas previstas, com auditoria automática e sem justificativa manual. |
 
 ## Documentação
 
+- [DESIGN.md](DESIGN.md): tokens, tipografia, layout responsivo e componentes Apple Light.
 - [TESTES.md](TESTES.md): integração, testes unitários, E2E, cobertura documentada, CI e limitações.
 - [e2e/README.md](e2e/README.md): instalação e execução isolada dos testes de navegador com Playwright.
 - [DEPLOY-VERCEL.md](DEPLOY-VERCEL.md): instalação reproduzível, variáveis, proteção, atualizações e checklist de produção.

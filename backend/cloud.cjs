@@ -3,7 +3,7 @@
 // Adaptador da API para Vercel Functions + Turso.
 // O backend local (backend/server.js com better-sqlite3) permanece inalterado.
 const express = require("express");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados, JUSTIFICATIVA_RESTAURACAO } = require("./jornada.cjs");
 const crypto = require("node:crypto");
 
 const COOKIE_NAME = "meu_ponto_sessao";
@@ -463,13 +463,15 @@ function createCloudApp({ client: suppliedClient, now: clock } = {}) {
     const ok = registros && typeof registros === "object" && !Array.isArray(registros) &&
       Object.entries(registros).every(([date, record]) => validDate(date) && validRecord(record)) &&
       (configuracoes === undefined || validSettings(configuracoes)) &&
-      justificativaValida(backup?.justificativa) &&
       previstasValidas(backup?.jornadasPrevistas, registros);
-    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
+    if (!ok) return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e jornadas previstas." });
 
     const db = req.cloudDb;
     const anteriores = await db.execute("SELECT * FROM registros ORDER BY data");
     const previous = new Map(anteriores.rows.map(row => [row.data, recordRow(row)]));
+    const plans = await db.execute("SELECT data, minutos FROM jornada_prevista_dia");
+    const previousPlans = new Map(plans.rows.map(row => [row.data, Number(row.minutos)]));
+    const subsequentPlans = new Map(previousPlans);
     const subsequent = new Map(Object.entries(registros).map(([data, record]) => [data, {
       entrada: record.entrada, saidaAlmoco: record.saidaAlmoco,
       retornoAlmoco: record.retornoAlmoco, saida: record.saida,
@@ -481,22 +483,34 @@ function createCloudApp({ client: suppliedClient, now: clock } = {}) {
     const statements = ["DELETE FROM registros"];
     for (const [date, record] of subsequent) {
       statements.push(saveDay(date, record));
-      const minutos = backup.jornadasPrevistas?.[date]?.minutos ??
+      const snapshot = backup.jornadasPrevistas?.[date];
+      const minutos = snapshot?.minutos ??
         minutosPlanejados(backup.configuracoes?.jornada ??
           (await db.execute("SELECT jornada FROM configuracoes WHERE id=1")).rows[0].jornada);
+      // Snapshot explícito substitui a carga; backup legado preserva a carga existente.
+      const conflito = snapshot
+        ? "DO UPDATE SET minutos = excluded.minutos, origem = excluded.origem, definido_em = excluded.definido_em"
+        : "DO NOTHING";
       statements.push(sql(
-        "INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?)",
+        "INSERT INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?) ON CONFLICT(data) " + conflito,
         [date, minutos, new Date().toISOString()]
       ));
+      if (snapshot || !previousPlans.has(date)) subsequentPlans.set(date, minutos);
     }
     const instante = new Date().toISOString();
     for (const data of new Set([...previous.keys(), ...subsequent.keys()])) {
       const antes = previous.get(data) ?? null;
       const depois = subsequent.get(data) ?? null;
-      if (JSON.stringify(antes) !== JSON.stringify(depois)) {
+      const planoAntes = previousPlans.get(data);
+      const planoDepois = subsequentPlans.get(data);
+      const mudouPrevista = antes && depois && planoAntes !== planoDepois;
+      if (JSON.stringify(antes) !== JSON.stringify(depois) || mudouPrevista) {
+        const motivo = mudouPrevista
+          ? `${JUSTIFICATIVA_RESTAURACAO} Jornada prevista: ${planoAntes ?? 'não definida'} → ${planoDepois} minutos.`
+          : JUSTIFICATIVA_RESTAURACAO;
         statements.push(sql(
           "INSERT INTO registro_auditoria (data, operacao, antes, depois, justificativa, instante) VALUES (?, 'restauracao', ?, ?, ?, ?)",
-          [data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), instante]
+          [data, JSON.stringify(antes), JSON.stringify(depois), motivo, instante]
         ));
       }
     }

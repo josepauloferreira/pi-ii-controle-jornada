@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("node:path");
 const db = require("./database");
 const { configureAuth } = require("./auth");
-const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados } = require("./jornada.cjs");
+const { horarioDoServidor, proximoCampo, justificativaValida, registroVazio, resolverDataJornada, diaAnterior, previstasValidas, minutosPlanejados, JUSTIFICATIVA_RESTAURACAO } = require("./jornada.cjs");
 
 const app = express();
 const porta = Number(process.env.PORT) || 3000;
@@ -285,6 +285,8 @@ app.put("/api/configuracoes", (req, res) => {
 // Restauração completa em transação: falha na validação não altera o banco.
 const restaurarBackup = db.transaction((backup) => {
   const anteriores = new Map(buscarTodos.all().map(linha => [linha.data, converterRegistro(linha)]));
+  const previstasAnteriores = new Map(db.prepare("SELECT data, minutos FROM jornada_prevista_dia").all()
+    .map(linha => [linha.data, linha.minutos]));
   db.prepare("DELETE FROM registros").run();
   for (const [data, registro] of Object.entries(backup.registros)) {
     const extras = registro.extras.map(extra => ({
@@ -292,9 +294,14 @@ const restaurarBackup = db.transaction((backup) => {
     }));
     salvarDia.run(data, registro.entrada, registro.saidaAlmoco,
       registro.retornoAlmoco, registro.saida, JSON.stringify(extras));
-    const minutos = backup.jornadasPrevistas?.[data]?.minutos ??
+    const snapshot = backup.jornadasPrevistas?.[data];
+    const minutos = snapshot?.minutos ??
       minutosPlanejados(backup.configuracoes?.jornada ?? buscarConfiguracoes.get().jornada);
-    db.prepare("INSERT OR IGNORE INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?)")
+    // Snapshot explícito substitui a carga; backup legado preserva a carga existente.
+    const conflito = snapshot
+      ? "DO UPDATE SET minutos = excluded.minutos, origem = excluded.origem, definido_em = excluded.definido_em"
+      : "DO NOTHING";
+    db.prepare("INSERT INTO jornada_prevista_dia (data, minutos, origem, definido_em) VALUES (?, ?, 'importado', ?) ON CONFLICT(data) " + conflito)
       .run(data, minutos, new Date().toISOString());
   }
   const posteriores = new Map(buscarTodos.all().map(linha => [linha.data, converterRegistro(linha)]));
@@ -305,8 +312,14 @@ const restaurarBackup = db.transaction((backup) => {
   for (const data of new Set([...anteriores.keys(), ...posteriores.keys()])) {
     const antes = anteriores.get(data) ?? null;
     const depois = posteriores.get(data) ?? null;
-    if (JSON.stringify(antes) !== JSON.stringify(depois)) {
-      evento.run(data, JSON.stringify(antes), JSON.stringify(depois), backup.justificativa.trim(), agora);
+    const planoAntes = previstasAnteriores.get(data);
+    const planoDepois = buscarPrevista.get(data)?.minutos;
+    const mudouPrevista = antes && depois && planoAntes !== planoDepois;
+    if (JSON.stringify(antes) !== JSON.stringify(depois) || mudouPrevista) {
+      const motivo = mudouPrevista
+        ? `${JUSTIFICATIVA_RESTAURACAO} Jornada prevista: ${planoAntes ?? 'não definida'} → ${planoDepois} minutos.`
+        : JUSTIFICATIVA_RESTAURACAO;
+      evento.run(data, JSON.stringify(antes), JSON.stringify(depois), motivo, agora);
     }
   }
   if (backup.configuracoes) {
@@ -329,9 +342,9 @@ app.put("/api/backup", (req, res) => {
     && (config.inicioSemana === "0" || config.inicioSemana === "1")
   );
 
-  if (!registrosValidos || !configValida || !justificativaValida(backup?.justificativa) ||
+  if (!registrosValidos || !configValida ||
       !previstasValidas(backup?.jornadasPrevistas, registros)) {
-    return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e justificativa (10 a 500 caracteres)." });
+    return res.status(400).json({ erro: "Backup inválido. Confira registros, configurações e jornadas previstas." });
   }
 
   restaurarBackup(backup);
