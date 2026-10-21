@@ -161,7 +161,9 @@ test('backup inválido, restauração cancelada, configurações e senha com err
   await page.locator('#senhaAtual').fill('incorreta');
   await page.locator('#senhaNova').fill(nextPassword);
   await page.getByRole('button', { name: 'Salvar nova senha' }).click();
-  await expect(page.locator('#senhaModal [data-dialog-error]')).toContainText('incorreta');
+  await expect(page.locator('#senhaAtualError')).toContainText('incorreta');
+  await expect(page.locator('#senhaAtual')).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.locator('#senhaAtual')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('#btnTrocarSenha')).toBeFocused();
   await goto(page, 'jornada');
@@ -389,3 +391,26 @@ test('troca de senha real encerra a sessão e permite novo login', async ({ page
   await page.locator('#authSubmit').click();
   await expect(page.locator('#appView')).toBeVisible();
 });
+
+for (const viewport of [{ width: 1440, height: 900 }, { width: 320, height: 600 }]) {
+  test(`grava as quatro seções reais em ${viewport.width}px com shell estável`, async ({ browser, baseURL }, info) => {
+    const context = await browser.newContext({ baseURL, viewport, recordVideo: { dir: info.outputPath('videos'), size: viewport } });
+    const page = await context.newPage();
+    try {
+      await login(page, 'visao-geral', nextPassword);
+      const shell = page.locator(viewport.width < 900 ? '.mobile-nav' : '.sidebar');
+      const bounds = await shell.boundingBox();
+      for (const route of ['jornada', 'historico', 'configuracoes', 'visao-geral']) {
+        await goto(page, route);
+        // Pausa só da gravação; a aplicação nunca espera para trocar de seção.
+        await page.waitForTimeout(650);
+        expect(await shell.boundingBox()).toEqual(bounds);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await info.attach(`${route}-${viewport.width}`, { body: await page.screenshot(), contentType: 'image/png' });
+      }
+    } finally {
+      await context.close();
+      await info.attach(`navegacao-${viewport.width}`, { path: await page.video().path(), contentType: 'video/webm' });
+    }
+  });
+}

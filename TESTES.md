@@ -2,6 +2,10 @@
 
 Este documento explica como reproduzir as verificações do Meu Ponto e os limites das evidências. Resultados locais registrados em **20/10/2026**, com **Node.js 24.22.0 e npm 11.19.1**. As contagens não representam percentual de cobertura; o estado remoto do commit deve ser consultado no GitHub Actions.
 
+## Atualização Motion v3 — 21/10/2026
+
+A suíte atual contém **30 E2E**: os 18 fluxos funcionais abaixo, 10 cenários de navegação/formulários isolados por interceptação e 2 gravações com API local real (1440px e 320px). Foram mantidos **15 unitários, 50 cloud/libSQL e 25 SQLite**. A CI armazena vídeos, capturas e traces no artefato `meu-ponto-e2e-evidencias` por 14 dias. Consulte [VALIDACAO-MOTION.md](VALIDACAO-MOTION.md) para decisões, resultados, revisão visual Chromium/Firefox e limites. As seções de 20/10/2026 abaixo permanecem como registro da rodada anterior.
+
 ## Início rápido
 
 Requisitos: Node.js **22.12+ ou 24.x**, npm e dependências para instalar o módulo nativo `better-sqlite3`. Na raiz:

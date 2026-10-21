@@ -94,3 +94,13 @@ jobs:
 
       - name: Executar cenários E2E com banco temporário
         run: npm run test:e2e
+
+      - name: Preservar gravações, capturas e traces de E2E
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: meu-ponto-e2e-evidencias
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          retention-days: 14

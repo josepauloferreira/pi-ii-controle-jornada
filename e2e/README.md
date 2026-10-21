@@ -2,6 +2,10 @@
 
 A suíte integra o frontend Vite à API Express/SQLite local, usando conta e dados fictícios. Em **20/10/2026**, os **18 cenários passaram** com **Node.js 24.22.0, npm 11.19.1 e Playwright 1.64.1**, sem acessar Turso ou produção.
 
+## Motion v3 — 21/10/2026
+
+A execução padrão agora inclui **30 testes**: os 18 cenários de integração documentados abaixo, 10 novos cenários de movimento/formulários em `tests/motion.spec.mjs` (respostas interceptadas) e 2 capturas de navegação com API/SQLite real descartável. As gravações desktop/mobile e os PNGs ficam em `test-results/`; a CI os preserva no artefato `meu-ponto-e2e-evidencias` por 14 dias. Os vídeos usam apenas credenciais fictícias. Resultados e limites em [VALIDACAO-MOTION.md](../VALIDACAO-MOTION.md).
+
 ## Como executar
 
 Requisitos: Node.js 22.12+ ou 24.x, npm e Chromium instalado pelo Playwright. Na raiz:
