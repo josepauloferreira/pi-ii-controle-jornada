@@ -333,7 +333,7 @@ input[type='checkbox'] { width: var(--space-6); min-height: var(--space-6); flex
   .auth-panel form { margin-top: var(--space-6); }
 }
 /* Entrada exclusiva de navegação. Sem snapshots, deslocamento ou atraso de interação. */
-@keyframes route-enter { from { opacity: .65; } to { opacity: 1; } }
+@keyframes route-enter { from { opacity: .9; } to { opacity: 1; } }
 @media (prefers-reduced-motion: no-preference) {
   .app-main.route-enter { animation: route-enter var(--motion-duration) var(--motion-easing); }
 }

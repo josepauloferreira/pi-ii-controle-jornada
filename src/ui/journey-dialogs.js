@@ -184,7 +184,7 @@ export function createJourneyDialogs({ getState, refresh, notify, afterPassword 
         dialog.setBusy(false);
         if (dialog.element.isConnected) {
           const field = error.message === 'Senha atual incorreta.' ? '#senhaAtual'
-            : error.message === 'A nova senha deve ser diferente da anterior.' ? '#senhaNova' : null;
+            : ['A nova senha deve ser diferente da anterior.', 'Informe a senha atual e uma nova senha de pelo menos 12 caracteres.'].includes(error.message) ? '#senhaNova' : null;
           if (field) {
             fieldError(dialog.query(field), error.message);
             dialog.query(field).focus();

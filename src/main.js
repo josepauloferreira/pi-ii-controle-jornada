@@ -162,6 +162,12 @@ async function authenticate(form) {
         render();
         return;
       }
+      if (setup && response.status === 400 && data.erro === 'A senha precisa ter pelo menos 12 caracteres e no máximo 256 bytes.') {
+        error.textContent = data.erro;
+        fieldError(form.querySelector('#authSenha'), data.erro);
+        form.querySelector('#authSenha').focus();
+        return;
+      }
       throw new Error(data.erro || 'Não foi possível acessar a conta. Confira sua conexão e tente novamente.');
     }
     form.reset();
