@@ -104,10 +104,16 @@ test('movimento reduzido, troca de preferência e navegador sem View Transitions
   await expect(page.locator('#main-content')).toHaveCSS('opacity', '1');
   await expect(page.locator('#main-content')).toHaveCSS('transform', 'none');
   await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => window.routeAnimations)).toEqual([]);
   await navigation(page, 'configuracoes');
   await expect.poll(() => page.evaluate(() => window.routeAnimations.length)).toBe(1);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   expect(await page.evaluate(() => document.getAnimations().length)).toBe(0);
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => window.routeAnimations.length)).toBe(1);
 });
 
 test('cadastro: exemplos, erros associados, 11/12 caracteres e limite UTF-8 sem truncar', async ({ page }) => {

@@ -55,7 +55,7 @@ function render(focus = false, routeChange = false) {
   }
   renderedRoute = state.user ? path : null;
   // Somente navegação por hash entre seções: dados, acesso e a mesma rota não animam.
-  if (sectionChange && renderedRoute) {
+  if (sectionChange && renderedRoute && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     screen.querySelector('.app-main')?.classList.add('route-enter');
   }
   bindTimeInputs(screen);
@@ -379,6 +379,11 @@ document.addEventListener('input', event => {
   if (event.target.id === 'authSenha') clearFieldError(document.getElementById('authConfirmarSenha'));
   if (event.target.closest('#authForm')) document.getElementById('authError').textContent = '';
 });
+for (const eventName of ['animationend', 'animationcancel']) {
+  document.addEventListener(eventName, event => {
+    if (event.animationName === 'route-enter') event.target.classList.remove('route-enter');
+  });
+}
 window.addEventListener('hashchange', () => {
   if (['como-funciona', 'main-content'].includes(route())) return;
   render(true, true);
