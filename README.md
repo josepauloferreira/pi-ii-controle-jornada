@@ -132,9 +132,9 @@ Na nuvem, registros, configurações, conta, sessões e limites de login ficam n
 | **Fazer backup** | Baixa JSON v2 com registros, configurações e jornadas previstas dos dias presentes no arquivo. |
 | **Restaurar backup** | Aceita backups legados/v1 e v2, substitui os registros e atualiza as configurações presentes, após revisar o arquivo e confirmar a substituição. |
 
-Backups JSON **não incluem senhas, sessões nem o histórico de auditoria**. A exportação omite snapshots de jornada prevista sem registro correspondente. A restauração aceita `registros`, `configuracoes` e `jornadasPrevistas`, sendo os dois últimos opcionais; valida o conteúdo antes da escrita e aplica as alterações em transação. Uma falha causa rollback. Cargas históricas já congeladas no destino são preservadas; os dias novos recebem a previsão do backup ou a configuração aplicável.
+Backups JSON **não incluem senhas, sessões nem o histórico de auditoria**. A exportação omite snapshots de jornada prevista sem registro correspondente. A restauração aceita `registros`, `configuracoes` e `jornadasPrevistas`, sendo os dois últimos opcionais; valida o conteúdo antes da escrita e aplica as alterações em transação. Uma falha causa rollback. Quando o arquivo fornece um snapshot em `jornadasPrevistas[data]`, sua carga substitui a armazenada no destino. Sem snapshot para a data, a carga existente é preservada; dias novos usam a configuração presente no backup ou, na ausência dela, a do destino. As cargas restauradas explicitamente continuam identificadas como importadas.
 
-Restaurar não exige justificativa manual. SQLite e libSQL gravam automaticamente “Restauração de backup confirmada pelo usuário.” em cada jornada cujo registro foi criado, alterado ou removido, preservando valores anteriores e posteriores. Faça um backup atual antes de restaurar e confira o ambiente de destino. O CSV não é um formato de restauração.
+Restaurar não exige justificativa manual. SQLite e libSQL gravam automaticamente “Restauração de backup confirmada pelo usuário.” em cada jornada cujo registro foi criado, alterado ou removido, preservando valores anteriores e posteriores. Se apenas a carga prevista mudar, o evento automático também registra os minutos anteriores e restaurados. Faça um backup atual antes de restaurar e confira o ambiente de destino. O CSV não é um formato de restauração.
 
 ### Dados do protótipo antigo
 
@@ -165,8 +165,8 @@ npm run test:e2e
 
 | Camada | Verificação | Resultado registrado |
 | --- | --- | --- |
-| SQLite local | Integração HTTP e regras de jornada | **24 aprovados**, 0 falhas |
-| libSQL / Vercel Function | Testes de integração, concorrência e contrato HTTP | **48 aprovados**, 0 falhas |
+| SQLite local | Integração HTTP e regras de jornada | **25 aprovados**, 0 falhas |
+| libSQL / Vercel Function | Testes de integração, concorrência e contrato HTTP | **50 aprovados**, 0 falhas |
 | Regras do frontend | `node:test` sobre jornada e backup | **15 testes unitários aprovados** |
 | Interface local | Playwright + Chromium + SQLite temporário | **18 cenários E2E aprovados** |
 | Frontend | `npm run build` | Build aprovado |

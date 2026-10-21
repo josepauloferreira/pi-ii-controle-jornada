@@ -26,8 +26,8 @@ Os E2E iniciam Vite e Express em `127.0.0.1:5173` e `127.0.0.1:3000`; mantenha a
 
 | Camada | Comando | Arquivos | Resultado local |
 | --- | --- | --- | --- |
-| Express + SQLite | `npm --prefix backend test` | `backend/auth.test.js`, `backend/contract.test.cjs`, `backend/jornada.test.cjs` | **24 aprovados**, 0 falhas |
-| Express + libSQL e entrada serverless | `npm run test:cloud` | `backend/cloud.test.cjs`, `backend/entry.test.cjs` | **48 aprovados**, 0 falhas |
+| Express + SQLite | `npm --prefix backend test` | `backend/auth.test.js`, `backend/contract.test.cjs`, `backend/jornada.test.cjs` | **25 aprovados**, 0 falhas |
+| Express + libSQL e entrada serverless | `npm run test:cloud` | `backend/cloud.test.cjs`, `backend/entry.test.cjs` | **50 aprovados**, 0 falhas |
 | Jornada e validação de backup | `npm run test:unit` | `tests/jornada.test.js`, `tests/backup.test.js` | **15 aprovados**, 0 falhas |
 | Interface com SQLite temporário | `npm run test:e2e` | `e2e/tests/jornada.spec.mjs` | **18 aprovados** no Chromium |
 | Compilação | `npm run build` | Vite, HTML, CSS e JavaScript | Aprovado |
@@ -46,12 +46,12 @@ A linha de base desta rodada, antes da integração da interface, passou com **2
 | Correções e auditoria | Justificativa de 10–500 caracteres, valores anteriores/posteriores e consulta após exclusão. |
 | Jornada prevista | Carga congelada por dia; alterar configurações preserva os dias anteriores; backup versionado. |
 | Marcações e histórico | Datas e horários válidos, extras, exclusão, listagem mensal e filtros inválidos. |
-| Backup | Validação antes da escrita, preservação em erro, cargas históricas, restauração sem justificativa manual e auditoria automática por registro alterado. |
+| Backup | Validação antes da escrita, preservação em erro, cargas históricas, restauração sem justificativa manual, prioridade do snapshot explícito (inclusive zero), fallback legado e auditoria automática inclusive quando só a carga prevista muda. |
 | HTTP e credenciais | JSON inválido, limite de payload, troca de senha, invalidação de sessões e limite de login. |
 
 O backend local também verifica cadastro concorrente, registros anteriores à conta e o módulo de jornada: fuso do servidor, ordem das etapas, motivos inválidos e jornada após meia-noite vinculada à data da entrada.
 
-A integração libSQL verifica cadastro concorrente por clientes independentes; sessão e dados entre instâncias; persistência após recriar o cliente; expiração; limite atômico de login; corrida entre login e troca de senha; rollback de backup; erros sem detalhes privados; e recuperação de conexão transitória. `backend/entry.test.cjs` verifica o handler de `api/index.js`, URL original, rewrite, query parameters e caminhos malformados.
+A integração libSQL verifica cadastro concorrente por clientes independentes; sessão e dados entre instâncias; persistência após recriar o cliente; expiração; limite atômico de login; corrida entre login e troca de senha; rollback de backup incluindo a substituição explícita de snapshots; erros sem detalhes privados; e recuperação de conexão transitória. `backend/entry.test.cjs` verifica o handler de `api/index.js`, URL original, rewrite, query parameters e caminhos malformados.
 
 **Limite:** libSQL é executado sobre arquivos locais descartáveis. Esta rodada não verifica rede Turso, configuração Vercel nem dados de produção.
 

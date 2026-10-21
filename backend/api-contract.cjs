@@ -137,6 +137,50 @@ module.exports = async function apiContract(t, request) {
     assert.equal((await call('/api/backup','PUT',backup)).status,200);
     assert.equal((await (await call('/api/jornada/previstas')).json())['2026-09-21'].minutos,360);
   });
+  await t.test('snapshot explícito substitui a carga armazenada e backup legado mantém fallback', async () => {
+    const original = await (await call('/api/registros')).json();
+    const config = await (await call('/api/configuracoes')).json();
+    const dia = '2026-10-15';
+    const previous = (await (await call('/api/jornada/previstas')).json())[dia];
+    assert.equal(previous.minutos, 480);
+    const history = async () => (await (await call('/api/jornada/historico/' + dia)).json()).alteracoes;
+    const count = (await history()).length;
+    const explicit = {
+      registros: original,
+      configuracoes: { ...config, jornada: '06:00' },
+      jornadasPrevistas: { [dia]: { minutos: 420, origem: 'registrada' } }
+    };
+    assert.equal((await call('/api/backup', 'PUT', explicit)).status, 200);
+    assert.deepEqual((await (await call('/api/jornada/previstas')).json())[dia], { minutos: 420, origem: 'importado' });
+    const audit = (await history()).at(-1);
+    assert.equal((await history()).length, count + 1);
+    assert.equal(audit.operacao, 'restauracao');
+    assert.deepEqual(audit.antes, original[dia]);
+    assert.deepEqual(audit.depois, original[dia]);
+    assert.match(audit.justificativa, /^Restauração de backup confirmada pelo usuário\./);
+    assert.match(audit.justificativa, /480.*420/);
+    assert.ok(Number.isFinite(Date.parse(audit.instante)));
+    // Repetir o mesmo snapshot não cria uma alteração fictícia na auditoria.
+    assert.equal((await call('/api/backup', 'PUT', explicit)).status, 200);
+    assert.equal((await history()).length, count + 1);
+    explicit.jornadasPrevistas[dia].minutos = 0;
+    assert.equal((await call('/api/backup', 'PUT', explicit)).status, 200);
+    assert.equal((await (await call('/api/jornada/previstas')).json())[dia].minutos, 0);
+    // Sem snapshot para o dia existente, preservar inclusive uma carga de zero.
+    const novo = '2030-02-04';
+    const legado = { registros: { ...original, [novo]: record }, configuracoes: explicit.configuracoes };
+    assert.equal((await call('/api/backup', 'PUT', legado)).status, 200);
+    let plans = await (await call('/api/jornada/previstas')).json();
+    assert.equal(plans[dia].minutos, 0);
+    assert.equal(plans[novo].minutos, 360);
+    // Na ausência de configurações no arquivo, usar as configurações do destino.
+    const outro = '2030-02-05';
+    assert.equal((await call('/api/backup', 'PUT', { registros: { ...legado.registros, [outro]: record } })).status, 200);
+    plans = await (await call('/api/jornada/previstas')).json();
+    assert.equal(plans[dia].minutos, 0);
+    assert.equal(plans[outro].minutos, 360);
+    assert.equal((await call('/api/backup', 'PUT', { registros: original, configuracoes: config, jornadasPrevistas: { [dia]: previous } })).status, 200);
+  });
   await t.test('restauração sem justificativa mantém auditoria automática e correções protegidas', async () => {
     const original = await (await call('/api/registros')).json();
     const changed = { ...record, entrada: '07:30', extras: [{ horario: '20:00', descricao: 'Dado fictício' }] };

@@ -52,6 +52,7 @@ test('landing, cadastro inicial, marcação, correção, extras, downloads e ses
   await expect(page.locator('#viewTitle')).toHaveText('Visão Geral');
   await expect(page.getByRole('heading', { name: 'Tudo pronto para começar.' })).toBeVisible();
   await goto(page, 'jornada');
+  await expect(page.locator('#quantidadeBatidas')).toHaveText('0 de 4 etapas principais · 0 batidas extras');
   await page.locator('#btnBaterPonto').click();
   await expect(page.locator('#entrada')).toHaveText(/^\d\d:\d\d$/);
   await page.locator('#editarEntrada').click();
@@ -66,7 +67,7 @@ test('landing, cadastro inicial, marcação, correção, extras, downloads e ses
   await page.locator('#descricaoExtra').fill('Atividade fictícia');
   await page.locator('#extraReason').fill(reason);
   await page.getByRole('button', { name: 'Adicionar batida', exact: true }).click();
-  await expect(page.locator('#quantidadeBatidas')).toHaveText('2');
+  await expect(page.locator('#quantidadeBatidas')).toHaveText('1 de 4 etapas principais · 1 batida extra');
   await goto(page, 'historico');
   const [csv] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Exportar CSV' }).click()]);
   expect(await readFile(await csv.path(), 'utf8')).toContain('18:30');
@@ -90,7 +91,7 @@ test('landing, cadastro inicial, marcação, correção, extras, downloads e ses
 test('navegação mobile, detalhes, auditoria e Escape com retorno de foco', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 600 });
   await login(page);
-  await expect(page.locator('#quantidadeBatidas')).toHaveText('2');
+  await expect(page.locator('#quantidadeBatidas')).toHaveText('1 de 4 etapas principais · 1 batida extra');
   await expect(page.locator('.sidebar')).toBeHidden();
   await expect(page.locator('.mobile-nav')).toBeVisible();
   await goto(page, 'historico');
@@ -136,6 +137,7 @@ test('restauração revisada sem justificativa e jornada histórica congelada', 
   await expect(page.locator('#horasHoje')).toHaveText('06:00');
   await expect(page.locator('#jornadaHoje')).toHaveText('08:00');
   await expect(page.locator('#saldoHoje')).toHaveText('-02:00');
+  await expect(page.locator('#quantidadeBatidas')).toHaveText('4 de 4 etapas principais · 0 batidas extras');
   await page.getByRole('button', { name: 'Histórico de alterações' }).click();
   const audit = page.getByRole('dialog', { name: 'Histórico de alterações' });
   await expect(audit).toContainText('Restauração de backup confirmada pelo usuário.');

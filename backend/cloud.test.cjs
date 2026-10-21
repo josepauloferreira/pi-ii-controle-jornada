@@ -254,15 +254,19 @@ test('instâncias serverless: concorrência, persistência e rollback', async t 
       assert.equal((await history.json()).eventos.length,1);
     });
     await t.test('rollback de backup após falha real no meio da transação',async()=>{
+      const plans = await (await request(0,'/api/jornada/previstas','GET',undefined,session)).json();
+      const history = await (await request(0,'/api/jornada/historico/2026-10-17','GET',undefined,session)).json();
       await clients[0].execute("CREATE TRIGGER rejeitar_teste BEFORE INSERT ON registros WHEN NEW.data = '2026-10-18' BEGIN SELECT RAISE(ABORT, 'teste privado'); END");
       const old=console.error; const logs=[];console.error=(...args)=>logs.push(args.join(' '));
       let r;
-      try {r=await request(1,'/api/backup','PUT',{registros:{'2099-01-01':record,'2026-10-18':record},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
+      try {r=await request(1,'/api/backup','PUT',{registros:{'2026-10-17':record,'2099-01-01':record,'2026-10-18':record},jornadasPrevistas:{'2026-10-17':{minutos:240}},configuracoes:{nome:'Não gravar',jornada:'04:00',inicioSemana:'0'}},session);} finally {console.error=old;}
       assert.equal(r.status,503); assert.ok(!(await r.text()).includes('teste privado'));
       assert.ok(logs.every(line=>!line.includes('teste privado')));
       assert.equal((await request(0,'/api/registros/2026-10-17','GET',undefined,session)).status,200);
       assert.equal((await request(0,'/api/registros/2099-01-01','GET',undefined,session)).status,404);
       assert.equal((await (await request(0,'/api/configuracoes','GET',undefined,session)).json()).jornada,'08:00');
+      assert.deepEqual(await (await request(0,'/api/jornada/previstas','GET',undefined,session)).json(),plans);
+      assert.deepEqual(await (await request(0,'/api/jornada/historico/2026-10-17','GET',undefined,session)).json(),history);
       await clients[0].execute('DROP TRIGGER rejeitar_teste');
     });
     await t.test('limite atômico sob 16 logins concorrentes',async()=>{
