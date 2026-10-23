@@ -159,9 +159,13 @@ Ação principal azul com texto branco; secundária branca com texto azul e cont
 
 Fundo branco, texto principal e fonte de corpo, borda de controle, caret azul, placeholder legível e label associado. Foco visível externo de 3px, afastado 3px. Erros mantêm texto, alerta e possibilidade de nova tentativa. Rótulos permanecem acima dos campos, com exemplo de usuário válido. Botões de exibir senha têm nome e estado acessíveis e preservam valor/seleção. Criação e troca explicam o mínimo de 12 caracteres; login não impõe esse mínimo. Novas senhas recebem aviso não bloqueador acima de 256 bytes UTF-8; o servidor valida o limite. Erros locais são associados ao campo por `aria-describedby` e `aria-invalid`, com foco no primeiro erro. Horários aceitam normalização de quatro dígitos para `HH:mm` e validação real.
 
+O botão de exibir senha mantém fundo transparente, inclusive no hover e pressionado, e alvo de 44px acomodado dentro da borda do campo. Nesse botão, o foco de 3px é interno para não ultrapassar o contorno do input; o foco do campo continua externo. O ícone muda de cor no hover, sem criar outra superfície.
+
 ### Cards / Containers
 
 Cards agrupam status, métricas, marcações, histórico e configurações. Métricas compartilham hierarquia de rótulo, valor e explicação; no mobile alinham rótulo e valor na mesma linha. Estados vazios explicam a ausência de registros. Carregamento mostra texto e blocos neutros; falha mostra mensagem e ação de tentar novamente.
+
+No resumo mobile, a descrição ocupa a largura do card e o status textual permanece inteiro. Nas etapas, as ações se alinham pela base; até 620px, corrigir e excluir usam ícones com nomes acessíveis por etapa e alvos de 44px na mesma linha. Cabeçalhos e células de horários e durações alinham à direita na tabela desktop; a lista mobile mantém alinhamento à esquerda.
 
 ### Navigation
 
