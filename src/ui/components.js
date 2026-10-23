@@ -4,7 +4,7 @@ import { formatarDuracao, minutosTrabalhados, minutosDeHorario, jornadaConcluida
 
 export { icon };
 export const brand = (href = '#/') => `<a class="brand" href="${href}" aria-label="Meu Ponto — início"><span class="brand-symbol">${icon('clock')}</span><span>Meu Ponto</span></a>`;
-export const button = (label, action, glyph = '', kind = '', attrs = '') => `<button type="button" class="btn ${kind}" data-action="${action}" ${attrs}>${glyph ? icon(glyph) : ''}${escape(label)}</button>`;
+export const button = (label, action, glyph = '', kind = '', attrs = '') => `<button type="button" class="btn ${kind}" data-action="${action}" ${attrs}>${glyph ? icon(glyph) : ''}${label ? `<span class="button-label">${escape(label)}</span>` : ''}</button>`;
 export function pageHeader(title, description, date) {
   return `<div class="page-header"><div><h1 id="viewTitle" tabindex="-1">${escape(title)}</h1><p>${escape(description)}</p></div>${date ? `<span class="date-label">${icon('calendar')}${escape(dateLabel(date, true))}</span>` : ''}</div>`;
 }
@@ -31,7 +31,7 @@ export function timeline(record, { editable = false, date, ids = false } = {}) {
     <span class="timeline-label"><span class="step-dot" aria-hidden="true"></span>${labels[index]}</span>
     <strong class="time" ${ids ? `id="${field}"` : ''}>${escape(record?.[field] || '--:--')}</strong>
     <span class="muted caption">${record?.[field] ? 'Registrada' : 'Pendente'}</span>
-    ${editable && record?.[field] ? `<div class="timeline-actions">${button('Corrigir', 'edit', 'edit', '', `data-date="${date}" data-field="${field}" id="editar${field[0].toUpperCase() + field.slice(1)}"`)}${button('', 'delete-field', 'trash', 'icon-button danger', `data-date="${date}" data-field="${field}" aria-label="Excluir ${labels[index].toLowerCase()}"`)}</div>` : ''}
+    ${editable && record?.[field] ? `<div class="timeline-actions">${button('Corrigir', 'edit', 'edit', 'timeline-edit', `data-date="${date}" data-field="${field}" id="editar${field[0].toUpperCase() + field.slice(1)}" aria-label="Corrigir ${labels[index].toLowerCase()}" title="Corrigir ${labels[index].toLowerCase()}"`)}${button('', 'delete-field', 'trash', 'icon-button danger', `data-date="${date}" data-field="${field}" aria-label="Excluir ${labels[index].toLowerCase()}"`)}</div>` : ''}
     </li>`).join('')}</ol>`;
 }
 export function emptyState(title, description, action = '') {
@@ -40,7 +40,7 @@ export function emptyState(title, description, action = '') {
 export function historyTable(state, dates, { recent = false } = {}) {
   if (!dates.length) return emptyState(recent ? 'Sua história começa aqui.' : 'Nenhuma jornada neste mês.', recent
     ? 'Registre seu primeiro ponto para acompanhar suas jornadas.' : 'Escolha outro mês ou comece uma jornada em Minha Jornada.', `<a class="btn" href="#/jornada">Ir para Minha Jornada ${icon('arrow')}</a>`);
-  return `<div class="table-wrap"><table class="history-table"><caption class="sr-only">${recent ? 'Jornadas anteriores' : 'Histórico de jornadas'}</caption><thead><tr><th scope="col">Data</th><th scope="col">Entrada</th><th scope="col">Saída</th><th scope="col">Trabalhadas</th><th scope="col">Prevista</th><th scope="col">Saldo</th><th scope="col"><span class="sr-only">Ações</span></th></tr></thead><tbody ${recent ? '' : 'id="tabelaHistorico"'}>${dates.map(date => {
+  return `<div class="table-wrap"><table class="history-table"><caption class="sr-only">${recent ? 'Jornadas anteriores' : 'Histórico de jornadas'}</caption><thead><tr><th scope="col">Data</th><th scope="col" class="numeric">Entrada</th><th scope="col" class="numeric">Saída</th><th scope="col" class="numeric">Trabalhadas</th><th scope="col" class="numeric">Prevista</th><th scope="col" class="numeric">Saldo</th><th scope="col"><span class="sr-only">Ações</span></th></tr></thead><tbody ${recent ? '' : 'id="tabelaHistorico"'}>${dates.map(date => {
     const r = state.records[date];
     const diff = saldoCalculado(r, planned(state, date));
     return `<tr><td data-label="Data"><div class="history-date"><strong>${escape(dateLabel(date))}</strong>${badge(r)}</div></td><td data-label="Entrada" class="numeric">${escape(r.entrada || '—')}</td><td data-label="Saída" class="numeric">${escape(r.saida || '—')}</td><td data-label="Trabalhadas" class="numeric">${formatarDuracao(minutosTrabalhados(r))}</td><td data-label="Prevista" class="numeric">${formatarDuracao(planned(state, date))}${state.plans[date]?.origem === 'legado_estimado' ? '<span class="caption muted"> (estimada)</span>' : ''}</td><td data-label="Saldo" class="numeric ${diff > 0 ? 'positive' : diff < 0 ? 'negative' : ''}">${escape(saldoDaJornada(r, planned(state, date)))}</td><td class="history-actions">${button('Ver detalhes', 'details', 'arrow', 'btn-link', `data-date="${date}" aria-label="Ver detalhes de ${escape(dateLabel(date))}"`)}</td></tr>`;
